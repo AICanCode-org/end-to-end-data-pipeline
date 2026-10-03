@@ -60,3 +60,42 @@ Schemas, your own code, error messages and aggregates are fine.
   (`free -h`).
 * **Time saved / lost (honest guess):** saved ~20 minutes; the wrong number would have gone into the design.
 * **What I learned:** ask for the other side of a decision, then check every number it brings.
+
+### 2026-08-08 · Phase 3 M2 · An off-by-5:30 bug
+* **Tool / model:** Copilot in VS Code
+* **Prompt (summary or paste):**
+  > Inline completion for the `utc_timestamp` macro / function.
+* **What it produced:** `strptime(col, '%Y-%m-%dT%H:%M:%S%z')` / `F.to_timestamp(col)`.
+* **What I kept / changed / rejected, and why:** rejected. Both return a value in the *session* time zone, so the
+  same code gives different dates on my laptop (IST) and in CI (UTC). Wrote the spec's rule instead: the first 19
+  characters as local time minus the parsed offset.
+* **How I verified it:** the parsing tests with `Z` and `+05:30` inputs, then the whole suite with `TZ=UTC` and
+  `TZ=Asia/Kolkata`: identical results only with my version.
+* **Time saved / lost (honest guess):** lost ~25 minutes.
+* **What I learned:** never let the machine's time zone into a business date.
+
+### 2026-08-11 · Phase 3 M3 · A plausible CAC
+* **Tool / model:** ChatGPT (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 1 of Phase 3 with the `mart_cac_monthly` stub and §5.2.
+* **What it produced:** a query joining spend to customers on month and channel, then `sum(spend) / count(*)`.
+* **What I kept / changed / rejected, and why:** changed. The join multiplied every spend row by the number of new
+  customers (a fan-out), and `/` gave a decimal. Aggregated each side first, then joined; integer division; NULL when
+  there are no new customers; channels without spend kept with 0.
+* **How I verified it:** the gold test against `golden/fixture/mart_cac_monthly.csv` (red before, green after) and
+  `parity.py compare` on the full history (MATCH).
+* **Time saved / lost (honest guess):** saved ~10 minutes of typing, lost 20 on the fan-out.
+* **What I learned:** aggregate before you join; a reconciliation check would have caught it too.
+
+### 2026-08-14 · Phase 3 M4 · Retrying a 401
+* **Tool / model:** Claude (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 3 of Phase 3: review `http.py`, `lake.py`, `ingest.py` for idempotency and safety.
+* **What it produced:** three findings: retries on every `HTTPError` including 401; the manifest written before the
+  partition swap; the bearer token printed in a debug line.
+* **What I kept / changed / rejected, and why:** fixed all three (fail fast on 401/4xx, manifest last, debug line
+  removed). Rejected a fourth suggestion to add a file lock library: `max_active_runs=1` already guarantees one writer.
+* **How I verified it:** new tests: a 401 is attempted exactly once; a writer that raises halfway leaves the old
+  partition; `caplog` never contains the token.
+* **Time saved / lost (honest guess):** saved ~1 hour.
+* **What I learned:** a review prompt with concrete questions finds real bugs; turn each into a test.

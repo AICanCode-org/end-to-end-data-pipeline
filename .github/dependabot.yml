@@ -1,0 +1,16 @@
+# Weekly update PRs for the pinned GitHub Actions and Python packages. Each PR runs the full CI, so a version bump
+# that changes a number (or breaks a track) is caught before it is merged. Airflow is pinned with its own
+# constraints file: bump it by hand (orchestration/requirements.txt + the constraints URL in Makefile and ci.yml).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directories: [/pipewright, /tracks/sql, /tracks/pyspark]
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]

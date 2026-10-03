@@ -1,12 +1,19 @@
-# Starter CI: lint + tests for the shared package and both tracks on every push and pull request.
-# Pending tests are skipped, so this is green on day one. In Phase 5 you replace this file with the full pipeline
-# (path filters, the contract and CMS checks, the DAG tests, parity of both tracks on the full data, ci-ok).
-# Every concept used here is explained in docs/github-actions-explained.md.
+# Full CI (Phase 5). On pull requests only the parts whose files changed run (everything when shared files change);
+# pushes to main / solution and manual runs check everything.
+#   contract       the committed fixture and source manifest are exactly what the seeded generator produces,
+#                  the scripts pass shellcheck, the CMS export is up to date
+#   pipewright     the shared package: lint + tests with the coverage gate (ingestion, checks, publish gate, runner)
+#   sql / pyspark  each track: lint + tests on the 3-day fixture (sql: dbt build = models + data tests + unit tests)
+#   orchestration  the Airflow DAG imports, has the right tasks, schedule and retries (Airflow's own pins)
+#   parity         the full synthetic history through BOTH tracks: every gold table equals the golden files and the
+#                  two tracks equal each other, row by row
+#   ci-ok          one check that fails if any job above failed (skipped is fine)
+# Every concept is explained in docs/github-actions-explained.md.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, solution]
   pull_request:
   workflow_dispatch:
 
@@ -14,18 +21,168 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  AIRFLOW_CONSTRAINTS: https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt
+
 jobs:
-  test:
-    name: ${{ matrix.part }} · lint + unit
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      all: ${{ github.event_name != 'pull_request' || steps.filter.outputs.shared == 'true' }}
+      docs: ${{ steps.filter.outputs.docs }}
+      sql: ${{ steps.filter.outputs.sql }}
+      pyspark: ${{ steps.filter.outputs.pyspark }}
+      orchestration: ${{ steps.filter.outputs.orchestration }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'pipewright/**'
+              - 'contract/**'
+              - 'source/**'
+              - 'scripts/**'
+              - 'Makefile'
+              - 'ruff.toml'
+              - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - 'cms/**'
+            sql:
+              - 'tracks/sql/**'
+            pyspark:
+              - 'tracks/pyspark/**'
+            orchestration:
+              - 'orchestration/**'
+
+  contract:
+    name: contract · fixture, manifest, scripts, CMS export
+    needs: changes
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the generator's only dependency (pinned)
+        run: python -m pip install -q pyyaml==6.0.3
+      - name: The committed 3-day fixture is exactly what the seeded generator produces
+        working-directory: source
+        run: |
+          version=$(python -c 'import yaml; print(yaml.safe_load(open("../contract/data-contract.yaml"))["version"].rsplit(".", 1)[0])')
+          python -m bazaarbox_source generate --out "$RUNNER_TEMP/fixture" --version "$version" --start 2026-06-01 --end 2026-06-03
+          diff -r "$RUNNER_TEMP/fixture" ../contract/fixture/source
+      - name: The full source still matches its committed manifest (same seed → same bytes)
+        working-directory: source
+        run: |
+          for manifest in ../contract/source-manifest-*.json; do
+            version=${manifest##*source-manifest-}; version=${version%.json}
+            python -m bazaarbox_source generate --out "$RUNNER_TEMP/source-$version" --version "$version" --check "$manifest"
+          done
+      - name: Check shell scripts
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          shellcheck scripts/*.sh
+      - name: CMS export is up to date with docs/ (python3 scripts/build-cms.py)
+        run: python3 scripts/build-cms.py --check
+
+  pipewright:
+    name: pipewright · lint + unit
+    needs: changes
+    if: needs.changes.outputs.all == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipewright/requirements*.txt
+      - run: make install-pipewright PY=python
+      - run: make lint-pipewright PY=python
+      - name: Tests (coverage gate in pipewright/pyproject.toml)
+        run: make test-pipewright PY=python
+
+  sql:
+    name: sql · lint + unit
+    needs: changes
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.sql == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pipewright/requirements*.txt
+            tracks/sql/requirements*.txt
+      - run: make install-sql PY=python
+      - name: Lint (sqlfluff with the dbt templater)
+        run: make lint-sql PY=python
+      - name: dbt build on the fixture (models + data tests + unit tests), then compare with the expected files
+        run: make test-sql PY=python
+
+  pyspark:
+    name: pyspark · lint + unit
+    needs: changes
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.pyspark == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pipewright/requirements*.txt
+            tracks/pyspark/requirements*.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: make install-pyspark PY=python
+      - run: make lint-pyspark PY=python
+      - name: Tests on the fixture (coverage gate in tracks/pyspark/pyproject.toml)
+        run: make test-pyspark PY=python
+
+  orchestration:
+    name: orchestration · DAG tests
+    needs: changes
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.orchestration == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: orchestration/requirements*.txt
+      - name: Install Airflow with its official constraints (the same pins as the Docker image)
+        run: python -m pip install -r orchestration/requirements-dev.txt --constraint "$AIRFLOW_CONSTRAINTS"
+      - run: make test-orchestration AIRFLOW_PY="$(command -v python)"
+
+  parity:
+    name: parity · both tracks on the full data = golden, sql = pyspark
+    needs: [changes, sql, pyspark]
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.sql == 'true' || needs.changes.outputs.pyspark == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        part: [pipewright, sql, pyspark]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,14 +192,26 @@ jobs:
           cache-dependency-path: |
             pipewright/requirements*.txt
             tracks/*/requirements*.txt
-      - if: matrix.part == 'pyspark'
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
-      - name: Install
-        run: make install-${{ matrix.part }} PY=python
-      - name: Lint
-        run: make lint-${{ matrix.part }} PY=python
-      - name: Tests
-        run: make test-${{ matrix.part }} PY=python
+      - run: make install-sql install-pyspark PY=python
+      - name: Generate the source, run every day through both tracks, compare
+        run: |
+          version=$(python -c 'import yaml; print(yaml.safe_load(open("contract/data-contract.yaml"))["version"].rsplit(".", 1)[0])')
+          PY=python scripts/parity-run.sh "$version" 2>&1 | tee parity.txt
+          { echo '### Parity'; echo '```'; cat parity.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, contract, pipewright, sql, pyspark, orchestration, parity]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any needed job failed or was cancelled (skipped is fine)
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac

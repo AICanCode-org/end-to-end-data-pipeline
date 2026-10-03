@@ -112,3 +112,17 @@ Schemas, your own code, error messages and aggregates are fine.
 * **How I verified it:** ran every test on the fixture and the full build: both "strict" tests failed on correct data.
 * **Time saved / lost (honest guess):** saved ~40 minutes.
 * **What I learned:** a test that fails on correct data is a wrong test; severity is a business decision.
+
+### 2026-08-21 · Phase 5 · Path filters that skip everything
+* **Tool / model:** Copilot Chat
+* **Prompt (summary or paste):**
+  > Prompt 3 of Phase 5: review my `ci.yml` for security and cost.
+* **What it produced:** add `timeout-minutes` everywhere, `permissions: contents: read`, and use `on: push: paths:`
+  to skip CI for docs-only changes.
+* **What I kept / changed / rejected, and why:** kept the timeouts and permissions; rejected `paths:` on the trigger:
+  a skipped workflow never reports the required checks, so docs PRs would be blocked forever. Kept per-job `if:` with
+  `ci-ok` instead.
+* **How I verified it:** a docs-only PR (jobs skipped, `ci-ok` green, mergeable) and a PR touching `tracks/sql`
+  (sql + parity ran); `actionlint` clean.
+* **Time saved / lost (honest guess):** saved ~15 minutes.
+* **What I learned:** CI changes need a test PR like any other code.

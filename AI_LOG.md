@@ -46,3 +46,17 @@ Schemas, your own code, error messages and aggregates are fine.
   remove revenue from the original day.
 * **Time saved / lost (honest guess):** saved ~30 minutes.
 * **What I learned:** most metric disputes are definitions, not SQL.
+
+### 2026-08-05 · Phase 2 · "Just use Airbyte and Delta"
+* **Tool / model:** Claude (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 2 of Phase 2: the strongest case for Airbyte against a small ingestion package.
+* **What it produced:** a fair case for Airbyte (hundreds of connectors, a UI, state handling for free), and a claim
+  that Airbyte "runs comfortably in 2 GB".
+* **What I kept / changed / rejected, and why:** kept the connector-count argument in ADR-0002's consequences ("for
+  dozens of sources a platform wins"). Rejected the 2 GB figure: Airbyte's own docs recommend far more memory for a
+  local deployment, and it runs many containers.
+* **How I verified it:** the official deployment requirements page; my laptop's free memory with Airflow already up
+  (`free -h`).
+* **Time saved / lost (honest guess):** saved ~20 minutes; the wrong number would have gone into the design.
+* **What I learned:** ask for the other side of a decision, then check every number it brings.

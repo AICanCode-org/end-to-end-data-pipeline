@@ -1,11 +1,11 @@
--- §4.4 One row per (non-test) customer, with the date of their first valid (not cancelled) order.
+-- §4.4 One row per (non-test) customer, with the date of their first valid order (not cancelled; 1.1: not rto either).
 with valid as (
     select
         customer_id,
         min(order_date) as first_order_date,
         count(*) as valid_orders
     from {{ ref('fct_orders') }}
-    where status != 'cancelled'
+    where status not in ('cancelled', 'rto')
     group by customer_id
 )
 

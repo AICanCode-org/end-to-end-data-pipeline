@@ -9,7 +9,7 @@ with valid as (
         created_at_utc,
         row_number() over (partition by customer_id order by created_at_utc, order_id) as n
     from {{ ref('fct_orders') }}
-    where status != 'cancelled'
+    where status not in ('cancelled', 'rto')
 ),
 
 firsts as (

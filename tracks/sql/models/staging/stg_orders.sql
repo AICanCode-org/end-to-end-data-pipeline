@@ -1,5 +1,6 @@
 -- One row per order: its latest version (contract/transform-spec.md §3.1). An order whose status changes later
 -- is extracted again in a later window, so the bronze layer holds several versions of it.
+-- 1.1: coupon_code / discount_paise are optional (sent from 2026-09-15); absent = no coupon, discount 0.
 with raw as (
     select *
     from
@@ -16,7 +17,9 @@ with raw as (
                 ship_city: 'VARCHAR',
                 payment_method: 'VARCHAR',
                 is_test: 'BOOLEAN',
-                items: 'STRUCT(sku VARCHAR, qty BIGINT, unit_price_paise BIGINT)[]'
+                items: 'STRUCT(sku VARCHAR, qty BIGINT, unit_price_paise BIGINT)[]',
+                coupon_code: 'VARCHAR',
+                discount_paise: 'BIGINT'
             }
         )
     where cast(dt as date) <= {{ run_date() }}
@@ -47,7 +50,9 @@ select
     coalesce(city_map.city, 'Unknown') as city,
     coalesce(city_map.region, 'Unknown') as region,
     lower(trim(latest.payment_method)) as payment_method,
-    latest.items
+    latest.items,
+    latest.coupon_code,
+    coalesce(latest.discount_paise, 0) as discount_paise
 from latest
 left join {{ ref('city_map') }} as city_map on lower(trim(latest.ship_city)) = city_map.raw_city
 where not latest.is_test

@@ -56,3 +56,42 @@ unit_tests:
       rows:
         - {month: 2026-06-01, active_subscriptions: 2, monthly_subscriptions: 1, annual_subscriptions: 1, mrr_paise: 26800, new_mrr_paise: 26800, churned_mrr_paise: 0}
         - {month: 2026-07-01, active_subscriptions: 1, monthly_subscriptions: 0, annual_subscriptions: 1, mrr_paise: 11900, new_mrr_paise: 0, churned_mrr_paise: 14900}
+
+  # 1.1.0
+  - name: rto_and_cancelled_orders_are_not_valid
+    description: A first valid order skips cancelled and rto (return to origin) orders; nobody without one has a date.
+    model: dim_customers
+    given:
+      - input: ref('stg_customers')
+        rows:
+          - {customer_id: C-1, signup_date: 2026-09-01, city: Pune, region: West, acquisition_channel: influencer}
+          - {customer_id: C-2, signup_date: 2026-09-02, city: Pune, region: West, acquisition_channel: organic}
+      - input: ref('fct_orders')
+        rows:
+          - {order_id: O-1, customer_id: C-1, order_date: 2026-09-03, status: rto}
+          - {order_id: O-2, customer_id: C-1, order_date: 2026-09-05, status: delivered}
+          - {order_id: O-3, customer_id: C-2, order_date: 2026-09-04, status: rto}
+          - {order_id: O-4, customer_id: C-2, order_date: 2026-09-06, status: cancelled}
+    expect:
+      rows:
+        - {customer_id: C-1, signup_date: 2026-09-01, city: Pune, region: West, acquisition_channel: influencer, first_order_date: 2026-09-05, valid_orders: 1}
+        - {customer_id: C-2, signup_date: 2026-09-02, city: Pune, region: West, acquisition_channel: organic, first_order_date: null, valid_orders: 0}
+
+  - name: net_is_gross_minus_the_coupon_discount
+    description: discount_paise defaults to 0 (orders before 2026-09-15 have no coupon fields); net = gross - discount.
+    model: fct_orders
+    overrides:
+      macros: {is_incremental: false}
+    given:
+      - input: ref('stg_orders')
+        rows:
+          - {order_id: O-1, customer_id: C-1, status: delivered, discount_paise: 0}
+          - {order_id: O-2, customer_id: C-1, status: rto, coupon_code: FEST10, discount_paise: 1500}
+      - input: ref('fct_order_items')
+        rows:
+          - {order_id: O-1, qty: 2, line_paise: 20000}
+          - {order_id: O-2, qty: 1, line_paise: 15000}
+    expect:
+      rows:
+        - {order_id: O-1, gross_paise: 20000, discount_paise: 0, net_paise: 20000, is_revenue: true}
+        - {order_id: O-2, gross_paise: 15000, discount_paise: 1500, net_paise: 13500, is_revenue: false}

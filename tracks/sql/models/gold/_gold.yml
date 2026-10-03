@@ -18,9 +18,9 @@ models:
         data_type: varchar
         description: marketing channel the customer came from
         data_tests:
-          - accepted_values: {arguments: {values: [google_ads, meta_ads, affiliates, referral, organic]}}
-      - {name: first_order_date, data_type: date, description: IST date of the first not-cancelled order (NULL if none)}
-      - {name: valid_orders, data_type: bigint, description: number of not-cancelled orders, data_tests: [non_negative]}
+          - accepted_values: {arguments: {values: [google_ads, meta_ads, affiliates, referral, organic, influencer]}}
+      - {name: first_order_date, data_type: date, description: IST date of the first valid order (not cancelled or rto; NULL if none)}
+      - {name: valid_orders, data_type: bigint, description: number of valid orders (not cancelled or rto), data_tests: [non_negative]}
 
   - name: dim_products
     description: One row per SKU in the latest catalogue snapshot on or before run_date.
@@ -47,7 +47,7 @@ models:
       - {name: updated_at_utc, data_type: timestamp, data_tests: [not_null]}
       - name: status
         data_type: varchar
-        data_tests: [{accepted_values: {arguments: {values: [placed, shipped, delivered, cancelled, returned]}}}]
+        data_tests: [{accepted_values: {arguments: {values: [placed, shipped, delivered, cancelled, returned, rto]}}}]
       - {name: city, data_type: varchar}
       - {name: region, data_type: varchar, data_tests: [not_null]}
       - {name: payment_method, data_type: varchar, data_tests: [{accepted_values: {arguments: {values: [prepaid, cod]}}}]}
@@ -55,6 +55,8 @@ models:
       - {name: units, data_type: bigint, data_tests: [non_negative]}
       - {name: gross_paise, data_type: bigint, data_tests: [not_null, non_negative]}
       - {name: is_revenue, data_type: boolean, description: "status is placed, shipped or delivered"}
+      - {name: discount_paise, data_type: bigint, description: "coupon discount (1.1; 0 without a coupon)", data_tests: [not_null, non_negative]}
+      - {name: net_paise, data_type: bigint, description: "gross_paise - discount_paise (1.1): what the customer paid", data_tests: [not_null, non_negative]}
 
   - name: fct_order_items
     description: One row per kept order line (quantity > 0) of the latest order version.

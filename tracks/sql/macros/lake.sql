@@ -12,3 +12,13 @@
 {% macro generate_schema_name(custom_schema_name, node) -%}
     {{ custom_schema_name if custom_schema_name else target.schema }}
 {%- endmacro %}
+
+{#- 1.1: incremental models rebuild the orders updated on or after this date (default: run_date - lookback_days;
+    a backfill passes its start date as the var `since`). -#}
+{% macro incremental_since() -%}
+    {%- if var("since", none) -%}
+        cast('{{ var("since") }}' as date)
+    {%- else -%}
+        cast({{ run_date() }} - interval {{ var("lookback_days", 3) }} day as date)
+    {%- endif -%}
+{%- endmacro %}

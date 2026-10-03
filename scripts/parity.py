@@ -8,7 +8,8 @@ Canonical form: every gold table of contract/data-contract.yaml, rows sorted by 
 empty field, dates ISO, timestamps 'YYYY-MM-DD HH:MM:SS', booleans true/false, doubles with 12 significant digits.
 Integers and text must match exactly; doubles within 1e-9 (relative). A golden directory may hold only
 fingerprints for the big tables (rows + sha256 of the canonical CSV); those are compared by fingerprint.
-Needs duckdb (already in every track's environment) and PyYAML.
+Needs duckdb (already in every track's environment) and PyYAML. PARITY_CONTRACT=<file> compares with the tables
+and columns of another contract version (1.1 backcompat check: contract/history/data-contract-1.0.0.yaml).
 """
 
 from __future__ import annotations
@@ -18,13 +19,15 @@ import hashlib
 import io
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-CONTRACT = yaml.safe_load((ROOT / "contract" / "data-contract.yaml").read_text(encoding="utf-8"))
+CONTRACT_FILE = Path(os.environ.get("PARITY_CONTRACT") or ROOT / "contract" / "data-contract.yaml")
+CONTRACT = yaml.safe_load(CONTRACT_FILE.read_text(encoding="utf-8"))
 GOLD = CONTRACT["gold"]
 
 

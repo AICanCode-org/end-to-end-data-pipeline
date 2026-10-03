@@ -14,6 +14,8 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/pipewright-parity.XXXXXX")
 [ "${KEEP:-0}" = 1 ] || trap 'rm -rf "$WORK"' EXIT
 (cd "$ROOT/source" && $PY -m bazaarbox_source generate --out "$WORK/source" --version "$VER" \
   --check "$ROOT/contract/source-manifest-$VER.json")
+# a range run is "after everything arrived": files that arrive late in the 1.1 drill join the drops
+if [ -d "$WORK/source/late" ]; then cp -r "$WORK/source/late/." "$WORK/source/drops/"; fi
 (cd "$ROOT/source" && SOURCE_NOW=follow SOURCE_QUIET=1 exec $PY -m bazaarbox_source serve --data "$WORK/source" --port "$PORT") &
 STUB=$!
 trap 'kill $STUB 2>/dev/null || true; [ "${KEEP:-0}" = 1 ] || rm -rf "$WORK"' EXIT

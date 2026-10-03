@@ -7,6 +7,28 @@ number or a gold column is never a patch release.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-25
+### Added
+- The September data (June to September 2026) and its golden files (`contract/golden/v1.1/`).
+- Data contract 1.1.0 (additive): order status `rto`, channel `influencer`, optional order fields `coupon_code` and
+  `discount_paise`, optional spend column `campaign_id`, `fct_orders.discount_paise` and `net_paise` (appended),
+  the `monitoring` section (freshness, volume, publish SLA, incremental lookback); 1.0.0 kept in
+  `contract/history/`. Transformation spec 1.1 with §6 incremental builds.
+- Incremental facts on both tracks (orders updated in the last 3 days, plus lines whose category was `unknown`),
+  with automatic full refreshes; `scripts/incremental-check.sh` proves incremental = full refresh on every table.
+- `pipewright backfill --start --end` (never moves the published date back) and `pipewright monitor`
+  (freshness, volume, SLA, DQ history; `ops.duckdb`; `warehouse/reports/alerts.jsonl`; optional webhook whose URL is
+  never logged); the Airflow DAG `pipewright_watch` (05:45 and 06:45 IST); in the dashboard, coupon discounts and
+  net revenue, and the monitoring history in the Data health tab.
+- `scripts/late-file-drill.sh` (21 September replayed), `scripts/backcompat-check.sh`, the `v11` CI job,
+  `docs/postmortem-2026-09.md`, ADR-0006, the monitoring section of the runbook.
+### Changed
+- `rto` orders are excluded like cancelled ones (not revenue, not a valid order).
+- The PySpark track reads CSV files with different headers (4- and 5-column spend files) in one run.
+### Compatibility
+- The 1.1 pipeline on 1.0 data reproduces every 1.0 gold table; the 1.0 dashboard renders a 1.1 warehouse; the 1.0
+  pipeline on 1.1 data refuses to publish September and leaves 31 August on the dashboard (`make backcompat`).
+
 ## [1.0.0] - 2026-08-31
 ### Added
 - The BazaarBox pipeline for the five CEO reports, contract 1.0.0, in two tracks with identical gold tables:

@@ -45,6 +45,13 @@ with revenue_tab:
     m1.metric("Revenue", data.rupees(int(rev["revenue_paise"].sum())))
     m2.metric("Orders", f"{int(rev['orders'].sum()):,}")
     m3.metric("Units", f"{int(rev['units'].sum()):,}")
+    disc = data.discounts(con)  # 1.1: None on a 1.0 warehouse
+    if disc is not None and int(disc["discount_paise"].sum()) > 0:
+        d1, d2, d3 = st.columns(3)
+        d1.metric("Coupon discounts", data.rupees(int(disc["discount_paise"].sum())))
+        d2.metric("Net revenue (after coupons)", data.rupees(int(disc["net_paise"].sum())))
+        d3.metric("Orders with a coupon", f"{int(disc['orders_with_coupon'].sum()):,}")
+        st.caption("Revenue above is gross (list price x quantity); coupons started on 15 Sep 2026.")
     daily = rev.groupby("order_date", as_index=False)["revenue_paise"].sum()
     st.line_chart(daily.assign(revenue_inr=daily["revenue_paise"] / 100), x="order_date", y="revenue_inr")
     split = rev.groupby(["region", "category"], as_index=False)["revenue_paise"].sum()
@@ -80,6 +87,21 @@ with cohort_tab:
     st.caption("Share of mature customers (first order 30+ days ago) who ordered again within 30 days.")
 
 with health_tab:
+    h = data.health(settings.warehouse.parent / "ops.duckdb")  # 1.1 monitoring; None before the first monitored run
+    if h is not None:
+        failing = h.checks[h.checks["status"] == "fail"]
+        st.subheader("Freshness, volume and SLA" + (f" for {h.checks['run_date'].iloc[0]:%Y-%m-%d}" if len(h.checks) else ""))
+        if len(failing):
+            st.warning(f"{len(failing)} monitoring check(s) failing: " + ", ".join(failing["check_id"]))
+        st.dataframe(h.checks, hide_index=True, width="stretch")
+        if len(h.dq_trend):
+            st.subheader("Data-quality trend")
+            st.line_chart(h.dq_trend, x="run_date", y=["passed", "blocking", "warnings"])
+        st.subheader("Recent runs")
+        st.dataframe(h.runs, hide_index=True, width="stretch")
+        if len(h.alerts):
+            st.subheader("Recent alerts")
+            st.dataframe(h.alerts, hide_index=True, width="stretch")
     st.subheader("Data-quality checks of the published build")
     st.dataframe(s.checks, hide_index=True, width="stretch")
     if s.latest_report:

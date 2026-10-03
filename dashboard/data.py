@@ -1,7 +1,9 @@
 """Everything the dashboard reads, as plain functions (tested without Streamlit).
 
-The dashboard reads only the published warehouse: gold tables plus ops.build_info / ops.dq_results, always with
-explicit column lists, so a newer warehouse (extra tables or columns, v1.1) still works with this version.
+The dashboard reads the published warehouse (gold tables plus ops.build_info / ops.dq_results) always with explicit
+column lists, so a newer warehouse (extra tables or columns) still works with an older dashboard. 1.1 adds coupon
+discounts (only when the warehouse has them, so this version also works on a 1.0 warehouse) and the monitoring
+history from ops.duckdb (freshness / SLA results, data-quality trend, runs, alerts).
 """
 
 from __future__ import annotations
@@ -114,3 +116,59 @@ def cohorts(con) -> pd.DataFrame:
     return con.execute(
         "SELECT cohort_month, customers, mature_customers, retained_30d, retention_rate FROM gold.mart_cohort_retention ORDER BY cohort_month"
     ).df()
+
+
+def has_column(con, table: str, column: str) -> bool:
+    schema, name = table.split(".")
+    return bool(con.execute("SELECT count(*) FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = ?",
+                            [schema, name, column]).fetchone()[0])
+
+
+def discounts(con) -> pd.DataFrame | None:
+    """Monthly gross vs net revenue and coupon discounts (1.1). None on a 1.0 warehouse (no discount column)."""
+    if not has_column(con, "gold.fct_orders", "discount_paise"):
+        return None
+    return con.execute(
+        "SELECT date_trunc('month', order_date)::DATE AS month, count(*) AS orders, "
+        "count(*) FILTER (WHERE discount_paise > 0) AS orders_with_coupon, "
+        "sum(gross_paise)::BIGINT AS gross_paise, sum(discount_paise)::BIGINT AS discount_paise, sum(net_paise)::BIGINT AS net_paise "
+        "FROM gold.fct_orders WHERE is_revenue GROUP BY 1 ORDER BY 1"
+    ).df()
+
+
+@dataclass
+class Health:
+    checks: pd.DataFrame  # the latest monitor results (freshness, volume, SLA, dq)
+    dq_trend: pd.DataFrame  # per run date: checks, passed, blocking, warnings
+    runs: pd.DataFrame
+    alerts: pd.DataFrame
+
+
+def health(ops_db: Path) -> Health | None:
+    """The monitoring history (1.1), or None when there is none yet (or it is a 1.0 deployment)."""
+    if not ops_db.exists():
+        return None
+    try:
+        con = duckdb.connect(str(ops_db), read_only=True)
+    except duckdb.Error:
+        return None
+    try:
+        checks = con.execute(
+            "SELECT run_date, check_id, kind, severity, status, detail FROM monitor_results "
+            "WHERE run_date = (SELECT max(run_date) FROM monitor_results) ORDER BY status = 'pass', severity, check_id"
+        ).df()
+        trend = con.execute(
+            "WITH latest AS (SELECT * FROM dq_history QUALIFY recorded_at = max(recorded_at) OVER (PARTITION BY run_date)) "
+            "SELECT run_date, count(*) AS checks, count(*) FILTER (WHERE status = 'pass') AS passed, "
+            "count(*) FILTER (WHERE status != 'pass' AND severity = 'error') AS blocking, "
+            "count(*) FILTER (WHERE status != 'pass' AND severity = 'warn') AS warnings FROM latest GROUP BY 1 ORDER BY 1"
+        ).df()
+        runs = con.execute(
+            "SELECT run_date, kind, status, incremental, since, started_at, finished_at, detail FROM run_log ORDER BY started_at DESC LIMIT 15"
+        ).df()
+        alerts = con.execute("SELECT run_date, raised_at, check_id, severity, message FROM alerts ORDER BY raised_at DESC LIMIT 15").df()
+    except duckdb.Error:
+        return None
+    finally:
+        con.close()
+    return Health(checks, trend, runs, alerts)

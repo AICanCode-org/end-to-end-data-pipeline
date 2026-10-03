@@ -13,7 +13,7 @@ read -r -a DC <<<"${DC:-docker compose}"
 D=${DOCKER:-docker}
 C=("${DC[@]}" --profile pipeline --profile ai-test --profile airflow)
 export SOURCE_PORT=${SOURCE_PORT:-18140} DASHBOARD_PORT=${DASHBOARD_PORT:-18142} AIRFLOW_PORT=${AIRFLOW_PORT:-18144}
-SV=${SOURCE_VERSION:-1.0}
+SV=${SOURCE_VERSION:-1.1}
 END=${END:-$(python3 -c "import sys; sys.path.insert(0, 'source'); from bazaarbox_source.generate import HORIZONS; print(HORIZONS['$SV'])")}
 IMGS=(pipewright-source:local pipewright-sql:local pipewright-pyspark:local pipewright-dashboard:local)
 [ "${AIRFLOW:-0}" = 1 ] && IMGS+=(pipewright-airflow:local)

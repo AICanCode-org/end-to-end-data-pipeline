@@ -1,4 +1,5 @@
-# Full CI (Phase 6 = Phase 5 + the dashboard's tests + a Docker job: every image, both pipelines in containers with
+# Full CI (Phase 7 = Phase 6 + the v1.1 checks: incremental = full refresh, the late-file drill, backward
+# compatibility with v1.0.0. Phase 6 added the dashboard's tests + a Docker job: every image, both pipelines in containers with
 # parity, smoke tests also with the AI provider down, the Airflow DAG end to end). On pull requests only the parts whose files changed run (everything when shared files change);
 # pushes to main / solution and manual runs check everything.
 #   contract       the committed fixture and source manifest are exactly what the seeded generator produces,
@@ -10,6 +11,8 @@
 #                  two tracks equal each other, row by row
 #   dashboard      the Streamlit dashboard's queries and pages on a small warehouse
 #   docker         scripts/docker-check.sh AIRFLOW=1: images, non-root + read-only containers, no secret in logs
+#   v1.1           incremental builds = full refresh (both tracks), the late-file drill (monitoring + alerts),
+#                  backcompat with a worktree of the v1.0.0 tag
 #   ci-ok          one check that fails if any job above failed (skipped is fine)
 # Every concept is explained in docs/github-actions-explained.md.
 name: CI
@@ -254,10 +257,46 @@ jobs:
         if: always()
         run: docker compose --profile pipeline --profile ai-test --profile airflow down -v --remove-orphans
 
+  v11:
+    name: v1.1 · incremental = full refresh, late-file drill, backcompat with v1.0.0
+    needs: [changes, sql, pyspark]
+    if: needs.changes.outputs.all == 'true' || needs.changes.outputs.sql == 'true' || needs.changes.outputs.pyspark == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the backcompat check needs the v1.0.0 tag
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pipewright/requirements*.txt
+            tracks/*/requirements*.txt
+            dashboard/requirements*.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: make install-sql install-pyspark install-dashboard PY=python
+      - name: Daily incremental builds give exactly the tables of a full rebuild (both tracks)
+        run: make incremental PY=python
+      - name: The late spend file of 20 Sep — monitoring warns, then alerts, the gate holds, the run catches up
+        run: make drill PY=python
+      - name: Backward compatibility with v1.0.0 (old data / new code, new data / old dashboard, new data / old pipeline)
+        run: |
+          if git rev-parse -q --verify "refs/tags/v1.0.0" >/dev/null; then
+            git worktree add "$RUNNER_TEMP/v1.0.0" v1.0.0
+            make backcompat PY=python OLD="$RUNNER_TEMP/v1.0.0"
+          else
+            echo "::notice::no v1.0.0 tag in this repository yet: backcompat check skipped"
+          fi
+
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, contract, pipewright, sql, pyspark, orchestration, parity, dashboard, docker]
+    needs: [changes, contract, pipewright, sql, pyspark, orchestration, parity, dashboard, docker, v11]
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any needed job failed or was cancelled (skipped is fine)

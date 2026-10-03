@@ -1,7 +1,7 @@
 # Pipewright local stack (about 3 GB RAM with the pipeline profile, about 5 GB with Airflow too).
 #   docker compose up -d --build                    source API (:18140) + dashboard (:18142)
-#   docker compose --profile pipeline run --rm pipeline-sql run --start 2026-06-01 --end 2026-08-31
-#   docker compose --profile pipeline run --rm pipeline-pyspark run --start 2026-06-01 --end 2026-08-31
+#   docker compose --profile pipeline run --rm pipeline-sql run --start 2026-06-01 --end 2026-09-30
+#   docker compose --profile pipeline run --rm pipeline-pyspark run --start 2026-06-01 --end 2026-09-30
 #   docker compose --profile pipeline run --rm parity      both tracks' gold tables must be identical
 #   docker compose --profile airflow up -d          Airflow 3 (:18144) runs the daily DAG at 06:00 IST
 # Ports bind to 127.0.0.1 only. Optional AI explainer: see .env.example (AI_PROVIDER=openai + AI_BASE_URL).
@@ -19,6 +19,8 @@ x-ai: &ai
   AI_MODEL: ${AI_MODEL:-}
   AI_API_KEY: ${AI_API_KEY:-}
   AI_TIMEOUT: ${AI_TIMEOUT:-15}
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  ALERT_MIN_SEVERITY: ${ALERT_MIN_SEVERITY:-error}
 
 x-pipeline: &pipeline
   <<: *hardening
@@ -33,7 +35,7 @@ x-pipeline: &pipeline
 services:
   source:
     <<: *hardening
-    build: { context: ., dockerfile: source/Dockerfile, args: { SOURCE_VERSION: "${SOURCE_VERSION:-1.0}" } }
+    build: { context: ., dockerfile: source/Dockerfile, args: { SOURCE_VERSION: "${SOURCE_VERSION:-1.1}" } }
     image: pipewright-source:local
     environment:
       SOURCE_NOW: ${SOURCE_NOW:-}             # empty = final state; "follow" = late updates show up in later windows

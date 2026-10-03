@@ -8,7 +8,7 @@ AIRFLOW_CONSTRAINTS := https://raw.githubusercontent.com/apache/airflow/constrai
 
 .PHONY: help setup setup-airflow install-pipewright install-sql install-pyspark install-dashboard \
         lint lint-pipewright lint-sql lint-pyspark test test-pipewright test-sql test-pyspark test-orchestration test-dashboard parity \
-        source run dashboard up down check
+        incremental drill backcompat source run dashboard up down check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-20s %s\n", $$1, $$2}'
@@ -63,14 +63,15 @@ test-dashboard: ## the Streamlit dashboard
 test: test-pipewright test-sql test-pyspark test-dashboard ## every suite except the DAG
 
 parity: ## full data through both tracks: identical gold tables, equal to contract/golden
-	PY=$(PY) scripts/parity-run.sh 1.0
+	PY=$(PY) scripts/parity-run.sh 1.1
 
 source: ## generate the source data and serve the API stub on :18140 (Ctrl-C to stop)
-	cd source && $(PY) -m bazaarbox_source generate --out ../source-data --check ../contract/source-manifest-1.0.json
+	cd source && $(PY) -m bazaarbox_source generate --out ../source-data --check ../contract/source-manifest-1.1.json
+	cp -r source-data/late/. source-data/drops/  # the late file of the drill has arrived
 	cd source && SOURCE_NOW=follow $(PY) -m bazaarbox_source serve --data ../source-data --port 18140
 
 run: ## the whole backfill with TRACK=sql|pyspark against the running stub (make source in another terminal)
-	PIPEWRIGHT_TRACK=$(TRACK) PYTHONPATH=tracks/pyspark$${PYTHONPATH:+:$$PYTHONPATH} $(PY) -m pipewright run --start 2026-06-01 --end 2026-08-31
+	PIPEWRIGHT_TRACK=$(TRACK) PYTHONPATH=tracks/pyspark$${PYTHONPATH:+:$$PYTHONPATH} $(PY) -m pipewright run --start 2026-06-01 --end 2026-09-30
 
 dashboard: ## the dashboard on :18142, reading warehouse/pipewright.duckdb
 	$(PY) -m streamlit run dashboard/app.py --server.port 18142
@@ -80,5 +81,14 @@ up: ## Docker: source + dashboard; then: docker compose --profile pipeline run -
 
 down: ## Docker: stop everything and delete the volumes
 	docker compose --profile pipeline --profile airflow down -v --remove-orphans
+
+incremental: ## 1.1: daily incremental builds give exactly the tables of a full rebuild (both tracks)
+	PY=$(PY) scripts/incremental-check.sh
+
+drill: ## 1.1: replay the morning the spend file arrived late (monitoring + alerts)
+	PY=$(PY) scripts/late-file-drill.sh
+
+backcompat: ## 1.1: compatibility with v1.0.0 (OLD=path to a checkout of v1.0.0, e.g. git worktree add ../v1.0.0 v1.0.0)
+	PY=$(PY) scripts/backcompat-check.sh $(or $(OLD),../v1.0.0)
 
 check: lint test parity ## what CI checks, in one go

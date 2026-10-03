@@ -152,3 +152,29 @@ Schemas, your own code, error messages and aggregates are fine.
   `uid 10001`, read-only root file system.
 * **Time saved / lost (honest guess):** lost ~30 minutes.
 * **What I learned:** "turn off the security setting" is never the fix; find the one permission really needed.
+
+### 2026-09-08 · Phase 7 · An incremental edge case, proved
+* **Tool / model:** ChatGPT (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 2 of Phase 7 with my incremental `fct_order_items`.
+* **What it produced:** three sequences: a status change 5 days later (outside the lookback), an order losing a
+  line, and a product added to the catalogue after its first order.
+* **What I kept / changed / rejected, and why:** the second was already handled (`delete+insert` by order). The
+  third was a real bug: lines built with category `unknown` were never rebuilt. Added "plus previous lines whose
+  category is unknown" to the incremental filter. The first is a documented limit of the 3-day lookback (the source
+  delivers status changes within 3 days; a backfill covers anything older).
+* **How I verified it:** `make incremental` over 2026-09-12..21, which contains a late SKU: DIFF on `fct_order_items`
+  before, MATCH 9/9 after, on both tracks.
+* **Time saved / lost (honest guess):** saved ~1 hour of debugging in production.
+* **What I learned:** the full refresh is the judge of incremental logic, not my reasoning.
+
+### 2026-09-23 · Phase 7 · Post-mortem draft
+* **Tool / model:** Claude (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 3 of Phase 7 with my timeline of 2 September.
+* **What it produced:** a clean draft, plus a "root cause: the data team did not read the marketing calendar".
+* **What I kept / changed / rejected, and why:** kept the structure; rewrote the root cause without blame (no channel
+  for upstream changes, and no alert on a blocked publish) and removed an invented "08:15 Slack message".
+* **How I verified it:** every timestamp against `ops.run_log` and `warehouse/reports/alerts.jsonl` from the replay.
+* **Time saved / lost (honest guess):** saved ~30 minutes.
+* **What I learned:** AI drafts fill gaps with plausible events; a post-mortem may only contain what happened.

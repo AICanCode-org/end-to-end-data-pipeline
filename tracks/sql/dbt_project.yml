@@ -1,0 +1,29 @@
+name: pipewright
+version: "1.0.0"
+config-version: 2
+profile: pipewright
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["../../contract/seeds"]   # one copy of the city map, shared with the PySpark track
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  run_date: "2026-08-31"        # the business date being built; the runner always passes it explicitly
+
+models:
+  pipewright:
+    staging:
+      +schema: silver
+      +materialized: table   # tables, not views: the published file is self-contained (views would name the build catalog)
+    gold:
+      +schema: gold
+      +materialized: table
+
+seeds:
+  pipewright:
+    +schema: silver
+    city_map:
+      +column_types: {raw_city: varchar, city: varchar, region: varchar}

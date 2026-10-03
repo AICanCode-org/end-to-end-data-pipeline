@@ -1,0 +1,19 @@
+# One lint configuration for all Python in the repo (shared package, tracks, source stub, scripts, DAG, dashboard).
+line-length = 160
+target-version = "py311"
+extend-exclude = ["tracks/sql/target", "tracks/sql/dbt_packages", "lake", "warehouse"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL"]
+ignore = [
+  "S101",     # assert is how pytest tests are written
+  "S608",     # SQL is built from the contract file and fixed identifiers, never from user input (see dq.py)
+  "PLR0913", "PLR2004", "PLR0911", "PLR0912", "PLR0915",  # small CLI/test helpers; readability over arbitrary limits
+  "PLC0415",  # local imports keep optional heavy dependencies (pyspark, airflow, streamlit) lazy
+  "RUF001", "RUF002", "RUF003",  # the rupee sign and en dashes are intentional
+  "S311",     # random is only used for the synthetic data generator and retry jitter, never for security
+  "PLR0917", "PLW2901",  # positional-heavy constructors and re-binding loop variables are fine in this codebase
+]
+
+[lint.isort]
+known-first-party = ["pipewright", "pipewright_spark", "bazaarbox_source"]

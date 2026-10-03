@@ -1,0 +1,14 @@
+{
+  "run_date": "2026-09-02",
+  "track": "sql",
+  "contract_version": "1.0.0",
+  "summary": {"checks": 3, "passed": 1, "failed_error": 1, "failed_warn": 1, "publishable": false},
+  "checks": [
+    {"id": "status_accepted", "kind": "accepted_values", "table": "fct_orders", "severity": "error", "status": "fail",
+     "observed": 41, "threshold": 0, "detail": "41 row(s) of fct_orders.status outside the accepted values", "unexpected_values": ["rto"]},
+    {"id": "item_sku_known", "kind": "relationship", "table": "fct_order_items", "severity": "warn", "status": "fail",
+     "observed": 3, "threshold": 0, "detail": "3 row(s) of fct_order_items.sku have no match in dim_products.sku", "unexpected_values": []},
+    {"id": "orders_not_empty", "kind": "row_count_min", "table": "fct_orders", "severity": "error", "status": "pass",
+     "observed": 10804, "threshold": 1, "detail": "fct_orders has 10804 rows (min 1)", "unexpected_values": []}
+  ]
+}

@@ -1,0 +1,122 @@
+version: 2
+
+# Gold = the tables the dashboard reads. Every one has an enforced contract: dbt refuses to build it if a column
+# is missing, renamed or of another type than contract/data-contract.yaml says.
+models:
+  - name: dim_customers
+    description: One row per (non-test) customer, latest profile, with their first valid order.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: customer_id, data_type: varchar, description: "C-nnnnnn"}
+      - {name: signup_date, data_type: date, description: IST date of sign-up}
+      - {name: city, data_type: varchar, description: canonical city or Unknown}
+      - name: region
+        data_type: varchar
+        description: North, South, East, West or Unknown
+      - name: acquisition_channel
+        data_type: varchar
+        description: marketing channel the customer came from
+      - {name: first_order_date, data_type: date, description: IST date of the first not-cancelled order (NULL if none)}
+      - {name: valid_orders, data_type: bigint, description: number of not-cancelled orders}
+
+  - name: dim_products
+    description: One row per SKU in the latest catalogue snapshot on or before run_date.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: sku, data_type: varchar}
+      - {name: product_name, data_type: varchar}
+      - name: category
+        data_type: varchar
+      - {name: price_paise, data_type: bigint}
+      - {name: first_seen_date, data_type: date}
+
+  - name: fct_orders
+    description: One row per (non-test) order in its latest state, totals from its kept lines.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: order_id, data_type: varchar}
+      - name: customer_id
+        data_type: varchar
+      - {name: order_date, data_type: date, description: IST date the order was placed}
+      - {name: created_at_utc, data_type: timestamp}
+      - {name: updated_at_utc, data_type: timestamp}
+      - name: status
+        data_type: varchar
+      - {name: city, data_type: varchar}
+      - {name: region, data_type: varchar}
+      - {name: payment_method, data_type: varchar}
+      - {name: items_count, data_type: bigint}
+      - {name: units, data_type: bigint}
+      - {name: gross_paise, data_type: bigint}
+      - {name: is_revenue, data_type: boolean, description: "status is placed, shipped or delivered"}
+
+  - name: fct_order_items
+    description: One row per kept order line (quantity > 0) of the latest order version.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: order_id, data_type: varchar}
+      - {name: line_number, data_type: integer}
+      - {name: order_date, data_type: date}
+      - name: sku
+        data_type: varchar
+      - {name: category, data_type: varchar}
+      - {name: region, data_type: varchar}
+      - {name: status, data_type: varchar}
+      - {name: qty, data_type: bigint}
+      - {name: unit_price_paise, data_type: bigint}
+      - {name: line_paise, data_type: bigint}
+
+  - name: mart_revenue_daily
+    description: "Report 1: revenue by IST day, region and product category (revenue statuses only)."
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: order_date, data_type: date}
+      - {name: region, data_type: varchar}
+      - {name: category, data_type: varchar}
+      - {name: orders, data_type: bigint}
+      - {name: units, data_type: bigint}
+      - {name: revenue_paise, data_type: bigint}
+
+  - name: mart_cac_monthly
+    description: "Report 2: CAC = spend / new customers (first valid order in the month), integer paise rounded down."
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: month, data_type: date}
+      - {name: channel, data_type: varchar}
+      - {name: spend_paise, data_type: bigint}
+      - {name: new_customers, data_type: bigint}
+      - {name: cac_paise, data_type: bigint, description: NULL when nobody was acquired}
+
+  - name: mart_mrr_monthly
+    description: "Report 3: Prime MRR at each month end (or run_date), with new and churned MRR."
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: month, data_type: date}
+      - {name: active_subscriptions, data_type: bigint}
+      - {name: monthly_subscriptions, data_type: bigint}
+      - {name: annual_subscriptions, data_type: bigint}
+      - {name: mrr_paise, data_type: bigint}
+      - {name: new_mrr_paise, data_type: bigint}
+      - {name: churned_mrr_paise, data_type: bigint}
+
+  - name: mart_top_products_30d
+    description: "Report 4: top 10 products by revenue in the 30 days ending on run_date."
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: as_of_date, data_type: date}
+      - {name: rank, data_type: integer}
+      - {name: sku, data_type: varchar}
+      - {name: product_name, data_type: varchar}
+      - {name: category, data_type: varchar}
+      - {name: units, data_type: bigint}
+      - {name: revenue_paise, data_type: bigint}
+
+  - name: mart_cohort_retention
+    description: "Report 5: share of mature customers who ordered again within 30 days of their first order."
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: cohort_month, data_type: date}
+      - {name: customers, data_type: bigint}
+      - {name: mature_customers, data_type: bigint}
+      - {name: retained_30d, data_type: bigint}
+      - {name: retention_rate, data_type: double}

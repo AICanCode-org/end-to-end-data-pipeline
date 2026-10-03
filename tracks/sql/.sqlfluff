@@ -1,0 +1,20 @@
+[sqlfluff]
+dialect = duckdb
+templater = dbt
+max_line_length = 120
+# capitalisation/aliasing rules are a style choice; the core rules (layout, references, ambiguity) are enforced
+rules = core
+exclude_rules = LT05, AM04, ST06, RF04, AL05
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:capitalisation.functions]
+extended_capitalisation_policy = lower

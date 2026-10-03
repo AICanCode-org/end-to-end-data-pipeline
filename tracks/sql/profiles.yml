@@ -1,0 +1,8 @@
+# dbt reads this file because the runner and the Makefile pass --profiles-dir . (nothing in ~/.dbt).
+pipewright:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('PIPEWRIGHT_DUCKDB', '../../warehouse/pipewright_build.duckdb') }}"
+      threads: 1

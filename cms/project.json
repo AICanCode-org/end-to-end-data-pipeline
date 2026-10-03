@@ -1,0 +1,111 @@
+{
+  "cms_file": "end-to-end-data-pipeline",
+  "slug": "end-to-end-data-pipeline",
+  "title": "Pipewright: End-to-End Data Pipeline for a CEO Dashboard",
+  "tagline": "Build a production-style batch pipeline for an Indian D2C brand, from a messy API and late file drops to five trusted CEO reports: idempotent ingestion into a lake, dbt or PySpark silver and gold models that must agree row by row, data-quality checks behind a publish gate, CI, an Airflow schedule, a Streamlit dashboard in Docker, and a second release with incremental models, backfills, schema evolution and freshness alerts",
+  "description": "BazaarBox, a direct-to-consumer home & kitchen brand, wants one dashboard that is correct by 06:30 IST every day: revenue by category and region, CAC by channel, Prime membership MRR, the top 10 products of the last 30 days and 30-day cohort retention. Over nine phases you build the pipeline behind it like a data engineering team: write requirements with SLAs and acceptance criteria, design the architecture, the bronze/silver/gold layers, a data contract and five ADRs (including why Airbyte, a Spark cluster and Metabase were swapped for lighter tools), then build it test-first. A seeded, offline copy of BazaarBox's systems (an orders and customers API with bearer tokens, cursor pagination, updated_at windows and injected 429/503 faults, plus daily payment, ad-spend and catalogue file drops) comes with real-world defects: mixed time zones, re-delivered orders, duplicate payment events, rupee amounts as text, city spellings, test orders and PII. You write idempotent ingestion into immutable lake partitions, silver and gold models in dbt (SQL track) or PySpark (Python track) whose gold tables must equal the golden files and each other row by row, declarative data-quality checks with severities and a publish gate built on an atomic swap, dbt data and unit tests, and a GitHub Actions pipeline that runs dbt build on a fixture and both tracks on the full history. v1.0.0 adds an Airflow 3 schedule, a Streamlit dashboard, an optional AI incident explainer with guardrails and an offline fallback, and a hardened Docker Compose stack under 6 GB of RAM. Then the pipeline meets its second month: a new channel and a new order status block publishing, coupons change the schema, and a partner file arrives late. You version the contract additively, make the facts incremental and prove them equal to a full refresh, add backfills, freshness, volume and SLA monitoring with alerts, prove backward compatibility with v1.0, and write a blameless post-mortem (v1.1.0). Everything runs on a laptop with no paid service and no API key.",
+  "difficulty": "advanced",
+  "tech_stack": [
+    "Python",
+    "dbt",
+    "DuckDB",
+    "PySpark",
+    "Apache Airflow",
+    "Streamlit",
+    "Docker",
+    "PostgreSQL",
+    "GitHub Actions"
+  ],
+  "tracks": [
+    {
+      "id": "sql",
+      "label": "SQL",
+      "tech_stack": [
+        "dbt-core 1.12",
+        "dbt-duckdb",
+        "DuckDB SQL",
+        "dbt tests + unit tests",
+        "sqlfluff",
+        "pytest"
+      ],
+      "folder": "tracks/sql"
+    },
+    {
+      "id": "pyspark",
+      "label": "PySpark",
+      "tech_stack": [
+        "PySpark 4.2 (local mode)",
+        "Java 21",
+        "pytest",
+        "ruff"
+      ],
+      "folder": "tracks/pyspark"
+    }
+  ],
+  "prerequisites": [
+    {
+      "title": "Git and the command line basics",
+      "url": null
+    },
+    {
+      "title": "SQL with GROUP BY, JOIN and window functions, or Python with DataFrames (pandas or PySpark)",
+      "url": null
+    },
+    {
+      "title": "Python basics (functions, modules, pytest) for the shared ingestion and checks",
+      "url": null
+    },
+    {
+      "title": "Docker basics (images, containers, compose) by Phase 6",
+      "url": null
+    }
+  ],
+  "outcomes": [
+    "Turn a stakeholder request into exact metric definitions, SLAs and acceptance criteria that include bad and late data",
+    "Design a layered pipeline (bronze, silver, gold) with a data contract, a publish gate and ADRs, and justify tool choices against a RAM budget",
+    "Ingest a paginated, authenticated API and file drops idempotently, with retries, quarantine, manifests and PII dropped at the door",
+    "Parse time zones, business dates and money exactly, and build latest-version silver and gold reports in dbt or PySpark",
+    "Make two independent implementations agree row by row with golden files, and use that parity as a CI gate",
+    "Write dbt data tests, unit tests and enforced model contracts, and declarative data-quality checks with severities",
+    "Build CI in GitHub Actions: path filters, an aggregator check, dbt build on a fixture, Spark with Java, Airflow with constraints",
+    "Schedule the pipeline with Airflow 3, serve a tested Streamlit dashboard, and ship hardened Docker images under 6 GB",
+    "Add an optional AI incident explainer that only sees aggregate facts, is checked by guardrails and falls back to a template",
+    "Evolve a contract additively, build incremental models proven equal to a full refresh, run backfills, monitor freshness and SLAs, and write a post-mortem",
+    "Use AI assistants deliberately and verify every transformation they write"
+  ],
+  "ai_feature": "An optional AI incident explainer (`pipewright explain`, also on the dashboard's Data health tab): when a data-quality check blocks publishing, it receives only numbered aggregate facts from the check report (check ids, counts, thresholds and safe enum codes; never rows or customer data) and writes a short incident note for the on-call engineer. Guardrails reject any answer without a valid citation, with a number that is not in the facts, with a URL or with data-changing SQL, and the pipeline then uses a deterministic template, saying why. Offline by default; any OpenAI-compatible endpoint (a local Ollama, or a free tier) can be plugged in, and the key is never logged",
+  "requires_paid_services": false,
+  "access": {
+    "default": "pro",
+    "plans": [
+      "pro",
+      "elite",
+      "campus"
+    ],
+    "free_phases": [
+      0
+    ]
+  },
+  "repo": {
+    "url": "https://github.com/AICanCode-org/end-to-end-data-pipeline",
+    "starter_ref": "main",
+    "solution_ref": "solution",
+    "phase_tags": [
+      "phase-0-end",
+      "phase-1-end",
+      "phase-2-end",
+      "phase-3-end",
+      "phase-4-end",
+      "phase-5-end",
+      "phase-6-end",
+      "phase-7-end",
+      "phase-8-end"
+    ],
+    "releases": [
+      "v1.0.0",
+      "v1.1.0"
+    ]
+  },
+  "live_demo_url": null,
+  "portfolio_blurb": "Built Pipewright, a production-style batch pipeline that turns BazaarBox's messy sources (a paginated orders/customers API with faults and late status changes, plus daily payment, ad-spend and catalogue file drops) into five CEO reports published by 06:30 IST: idempotent ingestion into immutable lake partitions with PII dropped at the door, silver and gold models implemented twice (dbt on DuckDB and PySpark) that agree row by row with golden files on four months of data, a data contract with severity-graded checks and dbt data and unit tests behind an atomic publish gate, GitHub Actions CI with cross-track parity, an Airflow 3 schedule, a Streamlit dashboard and a guard-railed AI incident explainer in a hardened Docker Compose stack under 6 GB. After a new channel and order status blocked publishing in the second month, v1.1 added an additive contract version with backward-compatibility checks, incremental facts proven equal to a full refresh, backfills, freshness/volume/SLA monitoring with alerts, a late-file drill and a blameless post-mortem."
+}

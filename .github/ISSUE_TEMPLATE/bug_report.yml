@@ -1,0 +1,30 @@
+name: Data bug
+description: A number on the dashboard or in a gold table looks wrong, or a run failed
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What looks wrong?
+      description: Which table / report, which date, what you expected and what you see. No personal data, please.
+      placeholder: "mart_revenue_daily for 2026-08-14, South / kitchen shows ₹0; the orders exist in fct_orders"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, track, run date. Attach `reports/dq-<date>.json` or the incident note if there is one.
+      placeholder: "PIPEWRIGHT_TRACK=sql make run, then ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: "v1.0.0 or the commit sha"
+  - type: dropdown
+    id: track
+    attributes:
+      label: Track
+      options: [SQL · dbt, Python · PySpark, both / shared]

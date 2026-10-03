@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: AiCanCode project page
+    url: https://www.aicancode.org/projects
+    about: The course pages for this project (phases, prompts and quizzes).

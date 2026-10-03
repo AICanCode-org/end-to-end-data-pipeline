@@ -1,0 +1,97 @@
+sku,name,category,price_inr,active
+SKU-0001,Spice Box, Kitchen,999.00,true
+SKU-0002,Spice Box Pro,kitchen,199.00,true
+SKU-0003,Spice Box Mini,Kitchen,349.00,true
+SKU-0004,Chopping Board,Kitchen,699.00,true
+SKU-0005,Chopping Board Pro,Kitchen,799.00,true
+SKU-0006,Chopping Board Mini,Kitchen,249.00,true
+SKU-0007,Tiffin Set,kitchen,399.00,true
+SKU-0008,Tiffin Set Pro,kitchen,349.00,true
+SKU-0010,Masala Grinder Jar, Kitchen,599.00,true
+SKU-0011,Masala Grinder Jar Pro,kitchen,1999.00,true
+SKU-0012,Masala Grinder Jar Mini,Kitchen,1299.00,true
+SKU-0013,Tea Strainer,kitchen,349.00,true
+SKU-0014,Tea Strainer Pro,kitchen,499.00,true
+SKU-0015,Tea Strainer Mini,Kitchen,599.00,true
+SKU-0016,Knife Set,kitchen,499.00,true
+SKU-0017,Knife Set Pro,kitchen,249.00,true
+SKU-0019,Kadai,Cookware,1499.00,true
+SKU-0020,Kadai Pro,cookware,599.00,true
+SKU-0021,Kadai Mini,cookware,349.00,true
+SKU-0022,Tawa,Cookware,249.00,true
+SKU-0023,Tawa Pro,Cookware,499.00,true
+SKU-0024,Tawa Mini,cookware,1299.00,true
+SKU-0025,Pressure Cooker,Cookware,999.00,true
+SKU-0026,Pressure Cooker Pro,cookware,199.00,true
+SKU-0028,Idli Stand,cookware,199.00,true
+SKU-0029,Idli Stand Pro,cookware,299.00,true
+SKU-0030,Idli Stand Mini,cookware,799.00,true
+SKU-0031,Saucepan,Cookware,199.00,true
+SKU-0032,Saucepan Pro,cookware,599.00,true
+SKU-0033,Saucepan Mini,cookware,699.00,true
+SKU-0034,Appam Patra,Cookware,499.00,true
+SKU-0035,Appam Patra Pro,cookware,2499.00,true
+SKU-0037,Steel Dabba Set,storage ,2499.00,true
+SKU-0038,Steel Dabba Set Pro,Storage,999.00,true
+SKU-0039,Steel Dabba Set Mini,storage ,1499.00,true
+SKU-0040,Glass Jar,Storage,1999.00,true
+SKU-0041,Glass Jar Pro,storage ,399.00,true
+SKU-0042,Glass Jar Mini,Storage,599.00,true
+SKU-0043,Rice Bin,storage ,199.00,true
+SKU-0044,Rice Bin Pro,storage ,299.00,true
+SKU-0046,Fridge Organiser,Storage,499.00,true
+SKU-0047,Fridge Organiser Pro,storage ,1299.00,true
+SKU-0048,Fridge Organiser Mini,storage ,399.00,true
+SKU-0049,Lunch Bag,Storage,1499.00,true
+SKU-0050,Lunch Bag Pro,storage ,299.00,true
+SKU-0051,Lunch Bag Mini,Storage,1299.00,true
+SKU-0052,Vacuum Flask,storage ,249.00,true
+SKU-0053,Vacuum Flask Pro,storage ,1299.00,true
+SKU-0055,Microfibre Cloth,cleaning,699.00,true
+SKU-0056,Microfibre Cloth Pro,Cleaning,599.00,true
+SKU-0057,Microfibre Cloth Mini,cleaning,599.00,true
+SKU-0058,Mop Set,Cleaning,699.00,true
+SKU-0059,Mop Set Pro,Cleaning,2499.00,true
+SKU-0060,Mop Set Mini,cleaning,299.00,true
+SKU-0061,Dish Rack,Cleaning,349.00,true
+SKU-0062,Dish Rack Pro,cleaning,349.00,true
+SKU-0064,Scrub Pack,cleaning,399.00,true
+SKU-0065,Scrub Pack Pro,Cleaning,999.00,true
+SKU-0066,Scrub Pack Mini,cleaning,599.00,true
+SKU-0067,Broom,cleaning,799.00,true
+SKU-0068,Broom Pro,Cleaning,499.00,true
+SKU-0069,Broom Mini,cleaning,399.00,true
+SKU-0070,Bucket,Cleaning,399.00,true
+SKU-0071,Bucket Pro,cleaning,599.00,true
+SKU-0073,Brass Diya,Decor,199.00,true
+SKU-0074,Brass Diya Pro,Decor,249.00,true
+SKU-0075,Brass Diya Mini,decor,349.00,true
+SKU-0076,Cushion Cover,Décor,1299.00,true
+SKU-0077,Cushion Cover Pro,decor,349.00,true
+SKU-0078,Cushion Cover Mini,Decor,1299.00,true
+SKU-0079,Wall Clock,Décor,699.00,true
+SKU-0080,Wall Clock Pro,Décor,799.00,true
+SKU-0082,Table Runner,Decor,499.00,true
+SKU-0083,Table Runner Pro,decor,199.00,true
+SKU-0084,Table Runner Mini,Decor,1299.00,true
+SKU-0085,Planter,Décor,599.00,true
+SKU-0086,Planter Pro,decor,499.00,true
+SKU-0087,Planter Mini,Décor,2999.00,true
+SKU-0088,Photo Frame,Décor,699.00,true
+SKU-0089,Photo Frame Pro,decor,699.00,true
+SKU-0091,Mixer Grinder,appliances,1249.00,true
+SKU-0092,Mixer Grinder Pro,appliances,2299.00,true
+SKU-0093,Mixer Grinder Mini,appliances,1599.00,true
+SKU-0094,Electric Kettle,Appliances,1299.00,true
+SKU-0095,Electric Kettle Pro,appliances,1349.00,true
+SKU-0096,Electric Kettle Mini,Appliances,2299.00,true
+SKU-0097,Induction Cooktop,appliances,1599.00,true
+SKU-0098,Induction Cooktop Pro,Appliances,3999.00,true
+SKU-0100,Hand Blender,Appliances,2299.00,true
+SKU-0101,Hand Blender Pro,appliances,2499.00,true
+SKU-0102,Hand Blender Mini,appliances,2999.00,true
+SKU-0103,Toaster,appliances,1249.00,true
+SKU-0104,Toaster Pro,Appliances,1249.00,true
+SKU-0105,Toaster Mini,appliances,1599.00,true
+SKU-0106,Iron,appliances,1699.00,true
+SKU-0107,Iron Pro,appliances,1499.00,true

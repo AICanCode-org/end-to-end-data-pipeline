@@ -1,0 +1,107 @@
+sku,product_name,category,price_paise,first_seen_date
+SKU-0001,Spice Box,kitchen,99900,2026-06-01
+SKU-0002,Spice Box Pro,kitchen,19900,2026-06-01
+SKU-0003,Spice Box Mini,kitchen,34900,2026-06-01
+SKU-0004,Chopping Board,kitchen,69900,2026-06-01
+SKU-0005,Chopping Board Pro,kitchen,79900,2026-06-01
+SKU-0006,Chopping Board Mini,kitchen,24900,2026-06-01
+SKU-0007,Tiffin Set,kitchen,39900,2026-06-01
+SKU-0008,Tiffin Set Pro,kitchen,34900,2026-06-01
+SKU-0009,Tiffin Set Mini,kitchen,79900,2026-08-17
+SKU-0010,Masala Grinder Jar,kitchen,59900,2026-06-01
+SKU-0011,Masala Grinder Jar Pro,kitchen,199900,2026-06-01
+SKU-0012,Masala Grinder Jar Mini,kitchen,129900,2026-06-01
+SKU-0013,Tea Strainer,kitchen,34900,2026-06-01
+SKU-0014,Tea Strainer Pro,kitchen,69900,2026-06-01
+SKU-0015,Tea Strainer Mini,kitchen,59900,2026-06-01
+SKU-0016,Knife Set,kitchen,49900,2026-06-01
+SKU-0017,Knife Set Pro,kitchen,24900,2026-06-01
+SKU-0018,Knife Set Mini,kitchen,49900,2026-07-22
+SKU-0019,Kadai,cookware,149900,2026-06-01
+SKU-0020,Kadai Pro,cookware,59900,2026-06-01
+SKU-0021,Kadai Mini,cookware,34900,2026-06-01
+SKU-0022,Tawa,cookware,24900,2026-06-01
+SKU-0023,Tawa Pro,cookware,49900,2026-06-01
+SKU-0024,Tawa Mini,cookware,129900,2026-06-01
+SKU-0025,Pressure Cooker,cookware,99900,2026-06-01
+SKU-0026,Pressure Cooker Pro,cookware,19900,2026-06-01
+SKU-0027,Pressure Cooker Mini,cookware,129900,2026-07-04
+SKU-0028,Idli Stand,cookware,19900,2026-06-01
+SKU-0029,Idli Stand Pro,cookware,29900,2026-06-01
+SKU-0030,Idli Stand Mini,cookware,79900,2026-06-01
+SKU-0031,Saucepan,cookware,19900,2026-06-01
+SKU-0032,Saucepan Pro,cookware,59900,2026-06-01
+SKU-0033,Saucepan Mini,cookware,69900,2026-06-01
+SKU-0034,Appam Patra,cookware,59900,2026-06-01
+SKU-0035,Appam Patra Pro,cookware,269900,2026-06-01
+SKU-0036,Appam Patra Mini,cookware,299900,2026-07-29
+SKU-0037,Steel Dabba Set,storage,249900,2026-06-01
+SKU-0038,Steel Dabba Set Pro,storage,99900,2026-06-01
+SKU-0039,Steel Dabba Set Mini,storage,149900,2026-06-01
+SKU-0040,Glass Jar,storage,209900,2026-06-01
+SKU-0041,Glass Jar Pro,storage,34900,2026-06-01
+SKU-0042,Glass Jar Mini,storage,59900,2026-06-01
+SKU-0043,Rice Bin,storage,19900,2026-06-01
+SKU-0044,Rice Bin Pro,storage,29900,2026-06-01
+SKU-0045,Rice Bin Mini,storage,129900,2026-08-28
+SKU-0046,Fridge Organiser,storage,49900,2026-06-01
+SKU-0047,Fridge Organiser Pro,storage,139900,2026-06-01
+SKU-0048,Fridge Organiser Mini,storage,39900,2026-06-01
+SKU-0049,Lunch Bag,storage,149900,2026-06-01
+SKU-0050,Lunch Bag Pro,storage,29900,2026-06-01
+SKU-0051,Lunch Bag Mini,storage,129900,2026-06-01
+SKU-0052,Vacuum Flask,storage,24900,2026-06-01
+SKU-0053,Vacuum Flask Pro,storage,119900,2026-06-01
+SKU-0054,Vacuum Flask Mini,storage,29900,2026-07-25
+SKU-0055,Microfibre Cloth,cleaning,69900,2026-06-01
+SKU-0056,Microfibre Cloth Pro,cleaning,59900,2026-06-01
+SKU-0057,Microfibre Cloth Mini,cleaning,59900,2026-06-01
+SKU-0058,Mop Set,cleaning,69900,2026-06-01
+SKU-0059,Mop Set Pro,cleaning,249900,2026-06-01
+SKU-0060,Mop Set Mini,cleaning,24900,2026-06-01
+SKU-0061,Dish Rack,cleaning,34900,2026-06-01
+SKU-0062,Dish Rack Pro,cleaning,34900,2026-06-01
+SKU-0063,Dish Rack Mini,cleaning,59900,2026-07-11
+SKU-0064,Scrub Pack,cleaning,39900,2026-06-01
+SKU-0065,Scrub Pack Pro,cleaning,99900,2026-06-01
+SKU-0066,Scrub Pack Mini,cleaning,59900,2026-06-01
+SKU-0067,Broom,cleaning,79900,2026-06-01
+SKU-0068,Broom Pro,cleaning,49900,2026-06-01
+SKU-0069,Broom Mini,cleaning,39900,2026-06-01
+SKU-0070,Bucket,cleaning,39900,2026-06-01
+SKU-0071,Bucket Pro,cleaning,59900,2026-06-01
+SKU-0072,Bucket Mini,cleaning,64900,2026-07-20
+SKU-0073,Brass Diya,decor,19900,2026-06-01
+SKU-0074,Brass Diya Pro,decor,24900,2026-06-01
+SKU-0075,Brass Diya Mini,decor,34900,2026-06-01
+SKU-0076,Cushion Cover,decor,129900,2026-06-01
+SKU-0077,Cushion Cover Pro,decor,34900,2026-06-01
+SKU-0078,Cushion Cover Mini,decor,129900,2026-06-01
+SKU-0079,Wall Clock,decor,69900,2026-06-01
+SKU-0080,Wall Clock Pro,decor,79900,2026-06-01
+SKU-0081,Wall Clock Mini,decor,149900,2026-07-25
+SKU-0082,Table Runner,decor,49900,2026-06-01
+SKU-0083,Table Runner Pro,decor,19900,2026-06-01
+SKU-0084,Table Runner Mini,decor,129900,2026-06-01
+SKU-0085,Planter,decor,59900,2026-06-01
+SKU-0086,Planter Pro,decor,49900,2026-06-01
+SKU-0087,Planter Mini,decor,319900,2026-06-01
+SKU-0088,Photo Frame,decor,69900,2026-06-01
+SKU-0089,Photo Frame Pro,decor,69900,2026-06-01
+SKU-0091,Mixer Grinder,appliances,124900,2026-06-01
+SKU-0092,Mixer Grinder Pro,appliances,224900,2026-06-01
+SKU-0093,Mixer Grinder Mini,appliances,159900,2026-06-01
+SKU-0094,Electric Kettle,appliances,129900,2026-06-01
+SKU-0095,Electric Kettle Pro,appliances,134900,2026-06-01
+SKU-0096,Electric Kettle Mini,appliances,229900,2026-06-01
+SKU-0097,Induction Cooktop,appliances,159900,2026-06-01
+SKU-0098,Induction Cooktop Pro,appliances,399900,2026-06-01
+SKU-0099,Induction Cooktop Mini,appliances,149900,2026-08-03
+SKU-0100,Hand Blender,appliances,229900,2026-06-01
+SKU-0101,Hand Blender Pro,appliances,249900,2026-06-01
+SKU-0102,Hand Blender Mini,appliances,299900,2026-06-01
+SKU-0103,Toaster,appliances,124900,2026-06-01
+SKU-0104,Toaster Pro,appliances,124900,2026-06-01
+SKU-0105,Toaster Mini,appliances,149900,2026-06-01
+SKU-0106,Iron,appliances,169900,2026-06-01
+SKU-0107,Iron Pro,appliances,169900,2026-06-01

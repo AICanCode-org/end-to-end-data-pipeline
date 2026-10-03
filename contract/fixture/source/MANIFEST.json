@@ -1,0 +1,20 @@
+{
+ "end": "2026-06-03",
+ "files": {
+  "api/customers.jsonl": "ec5c21a78a998facd75df33a3274f6d19c2e327cd3b6c663128e2d260d9e370c",
+  "api/orders.jsonl": "c6fc6fd70b6ce3322a9b1c6abcc0f95df3e0357f36d9b045f33c921f87bb975f",
+  "drops/marketing_spend/spend_2026-06-01.csv": "bbdf34ab6215f583401f4bef97b8aedb55c6c4de30e3eb5764d2be5882990f13",
+  "drops/marketing_spend/spend_2026-06-02.csv": "e218bf70598d87f3f7e457c42888e1478dbd9fb694563b09b7e02c61785fa705",
+  "drops/marketing_spend/spend_2026-06-03.csv": "d667a24e9b74a36e0309e5b8dd504b4e4b074e40cbff317bc1079ddd8184ae97",
+  "drops/payments/payments_2026-06-01.jsonl": "69f087b2dc5f68a7087d9ed34314d718d7d2e694a2974751eb8b3071fe92885e",
+  "drops/payments/payments_2026-06-02.jsonl": "86b49fe621262039a6554fecb693e2074dc25d0a876dd00ca0d0c3d88450d8e8",
+  "drops/payments/payments_2026-06-03.jsonl": "2e706d5a4976c20fa77aa3057b26044bb861ef126814ee6a54dc710c27a070d0",
+  "drops/products/products_2026-06-01.csv": "3579f9e6c29ca9c17c169600bc2d0741ceef4db7618f3a4e142fa1c7a892db0b",
+  "drops/products/products_2026-06-02.csv": "3579f9e6c29ca9c17c169600bc2d0741ceef4db7618f3a4e142fa1c7a892db0b",
+  "drops/products/products_2026-06-03.csv": "3579f9e6c29ca9c17c169600bc2d0741ceef4db7618f3a4e142fa1c7a892db0b"
+ },
+ "generator": "bazaarbox_source",
+ "seed": 20260601,
+ "start": "2026-06-01",
+ "version": "1.0"
+}

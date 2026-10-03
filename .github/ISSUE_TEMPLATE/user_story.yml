@@ -1,0 +1,24 @@
+name: User story
+description: Something a person at BazaarBox needs from the pipeline or the dashboard
+labels: [story]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      description: "As a <role>, I want <capability>, so that <outcome>."
+      placeholder: "As the CEO, I want revenue by category and region for the last 30 days, so that I can move stock and ad spend."
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable statements (Given / When / Then), including what happens with bad or late data.
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data and rules
+      description: Which sources and gold tables; which rule in contract/transform-spec.md (or a new one).

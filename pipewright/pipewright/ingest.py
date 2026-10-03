@@ -10,12 +10,16 @@ Every load writes a manifest (rows, sha256, contract version) and moves the sour
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
+import io
+import json
 from dataclasses import asdict, dataclass
 
 from . import contract as contract_mod
 from . import lake
-from .config import Settings
+from .config import Settings, window
+from .contract import ContractViolation
 from .http import HttpClient
 
 
@@ -44,41 +48,89 @@ def _client(settings: Settings) -> HttpClient:
 
 def fetch_window(client: HttpClient, endpoint: str, day: dt.date, page_size: int) -> tuple[list[dict], int]:
     """Every record whose updated_at falls in the window of `day`, following next_cursor to the last page."""
-    # TODO(Phase 3 M1): implement fetch_window.
-    # GET the endpoint with updated_since / updated_before = config.window(day) and limit = page_size,
-    # then follow next_cursor until it is null. Return (all rows, number of pages).
-    raise NotImplementedError("Phase 3 M1: fetch_window (see the TODO above)")
+    since, before = window(day)
+    params: dict[str, str | int] = {"updated_since": since, "updated_before": before, "limit": page_size}
+    rows, pages = [], 0
+    while True:
+        body = client.get_json(endpoint, params)
+        pages += 1
+        rows.extend(body["data"])
+        if not body.get("next_cursor"):
+            return rows, pages
+        params["cursor"] = body["next_cursor"]
 
 
 def conform(rows: list[dict], spec: dict, day: dt.date) -> tuple[list[dict], list[dict]]:
     """Drop PII and check required fields; rows are otherwise kept exactly as received. Returns (good, rejected)."""
-    # TODO(Phase 3 M1): implement conform.
-    # For every row: drop the spec's pii_drop fields; a row missing a required field goes to `rejected`
-    # (with the reason), everything else to `good`, otherwise unchanged (bronze keeps what the source sent).
-    raise NotImplementedError("Phase 3 M1: conform (see the TODO above)")
+    good, bad = [], []
+    for row in rows:
+        row = {k: v for k, v in row.items() if k not in spec.get("pii_drop", [])}
+        missing = [f for f in spec["required"] if row.get(f) is None]
+        if missing:
+            bad.append({"reason": f"missing required {missing}", "record": row})
+            continue
+        good.append(row)
+    key = spec["primary_key"]
+    good.sort(key=lambda r: str(r[key]))
+    return good, bad
 
 
 def ingest_api(settings: Settings, source: str, day: dt.date, client: HttpClient | None = None) -> LoadResult:
-    # TODO(Phase 3 M1): implement ingest_api.
-    # fetch_window -> conform -> lake.write_partition(source, day, good) -> quarantine the rejected rows,
-    # then _finish() writes the manifest and moves the high-water mark. Return a LoadResult.
-    raise NotImplementedError("Phase 3 M1: ingest_api (see the TODO above)")
+    c = contract_mod.load(settings.contract)
+    spec = contract_mod.source(c, source)
+    if spec["kind"] != "api":
+        raise ValueError(f"{source} is not an API source")
+    client = client or _client(settings)
+    rows, pages = fetch_window(client, spec["endpoint"], day, settings.page_size)
+    good, bad = conform(rows, spec, day)
+    content = lake.jsonl(good)
+    target = lake.partition_dir(settings.lake_dir, source, spec["partition_key"], day)
+    lake.write_partition(target, {"part-0000.jsonl": content})
+    _quarantine(settings, source, day, bad)
+    result = LoadResult(source, day.isoformat(), len(good), len(bad), lake.sha256(content), str(target), pages, client.retries)
+    _finish(settings, source, day, result, c["version"])
+    return result
 
 
 def ingest_file(settings: Settings, source: str, day: dt.date) -> LoadResult:
-    # TODO(Phase 3 M1): implement ingest_file.
-    # The drop for `day` is <drops>/<pattern with the date>. Missing -> raise MissingDrop (exit code 3: retry later).
-    # Validate it against the contract (validate_file), then copy the bytes unchanged into the partition.
-    raise NotImplementedError("Phase 3 M1: ingest_file (see the TODO above)")
+    c = contract_mod.load(settings.contract)
+    spec = contract_mod.source(c, source)
+    if spec["kind"] != "file":
+        raise ValueError(f"{source} is not a file source")
+    path = settings.drops_dir / spec["pattern"].format(date=day.isoformat())
+    if not path.is_file():
+        raise MissingDrop(f"{source}: {path.name} has not arrived in {settings.drops_dir}")
+    content = path.read_bytes()
+    rows = validate_file(content, spec, path.name)
+    target = lake.partition_dir(settings.lake_dir, source, spec["partition_key"], day)
+    lake.write_partition(target, {path.name: content})
+    result = LoadResult(source, day.isoformat(), rows, 0, lake.sha256(content), str(target))
+    _finish(settings, source, day, result, c["version"])
+    return result
 
 
 def validate_file(content: bytes, spec: dict, name: str) -> int:
     """Check a drop file against the contract; extra columns/keys are allowed (additive schema evolution)."""
-    # TODO(Phase 3 M1): implement validate_file.
-    # CSV: the header must contain every required column (extra columns are fine: the contract allows additions).
-    # JSON lines: every line must parse and carry the required keys. Raise ContractViolation with the file name.
-    # Return the number of records.
-    raise NotImplementedError("Phase 3 M1: validate_file (see the TODO above)")
+    text = content.decode("utf-8")
+    if spec["format"] == "csv":
+        reader = csv.DictReader(io.StringIO(text))
+        missing = [col for col in spec["required"] if col not in (reader.fieldnames or [])]
+        if missing:
+            raise ContractViolation(f"{name}: missing required column(s) {missing}")
+        return sum(1 for _ in reader)
+    count = 0
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ContractViolation(f"{name}: line {n} is not JSON ({exc.msg})") from None
+        missing = [k for k in spec["required"] if obj.get(k) is None]
+        if missing:
+            raise ContractViolation(f"{name}: line {n} misses required key(s) {missing}")
+        count += 1
+    return count
 
 
 def missing_drops(settings: Settings, day: dt.date) -> list[str]:

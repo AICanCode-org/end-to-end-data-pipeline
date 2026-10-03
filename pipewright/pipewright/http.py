@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import random
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections.abc import Callable
 
 RETRYABLE = {429, 500, 502, 503, 504}
@@ -29,16 +33,30 @@ class HttpClient:
         return f"HttpClient({self.base_url!r})"
 
     def delay(self, attempt: int, retry_after: str | None) -> float:
-        # TODO(Phase 3 M1): implement delay.
-        # Retry-After (seconds, digits only) wins, capped at max_backoff.
-        # Otherwise exponential backoff: base = min(backoff * 2 ** (attempt - 1), max_backoff), then 'equal jitter':
-        # base / 2 + a random amount in [0, base / 2] from self.rng (tests pass a seeded random.Random).
-        raise NotImplementedError("Phase 3 M1: delay (see the TODO above)")
+        if retry_after and retry_after.isdigit():
+            return min(float(retry_after), self.max_backoff)
+        base = min(self.backoff * 2 ** (attempt - 1), self.max_backoff)
+        return base / 2 + self.rng.uniform(0, base / 2)  # "equal jitter"
 
     def get_json(self, path: str, params: dict[str, str | int]) -> dict:
-        # TODO(Phase 3 M1): implement get_json.
-        # Build the URL with urllib.parse.urlencode(params) and send the bearer token in the Authorization header.
-        # Retry 429, 5xx, timeouts and connection errors up to max_attempts (count self.attempts and self.retries),
-        # sleeping self.delay(attempt, Retry-After) in between; a 4xx other than 429 is a SourceError at once.
-        # Never put the token in an exception message or a log line.
-        raise NotImplementedError("Phase 3 M1: get_json (see the TODO above)")
+        url = f"{self.base_url}{path}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {self._token}", "Accept": "application/json"})  # noqa: S310  # scheme checked in __init__
+        for attempt in range(1, self.max_attempts + 1):
+            self.attempts += 1
+            retry_after = None
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310  # scheme checked in __init__
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401:
+                    raise SourceError("401 Unauthorized from the source API: check SOURCE_API_TOKEN") from None
+                if exc.code not in RETRYABLE:
+                    raise SourceError(f"{exc.code} from {path}: {exc.read()[:200].decode('utf-8', 'replace')}") from None
+                retry_after, reason = exc.headers.get("Retry-After"), f"HTTP {exc.code}"
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+                reason = f"{type(exc).__name__}: {getattr(exc, 'reason', exc)}"
+            if attempt == self.max_attempts:
+                raise SourceError(f"{path}: giving up after {attempt} attempts ({reason})")
+            self.retries += 1
+            self.sleep(self.delay(attempt, retry_after))
+        raise AssertionError("unreachable")  # pragma: no cover

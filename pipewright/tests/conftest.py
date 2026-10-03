@@ -18,10 +18,6 @@ DAYS = [dt.date(2026, 6, 1), dt.date(2026, 6, 2), dt.date(2026, 6, 3)]
 # Tests still to be switched on, one group per milestone (Phase 3: delete a line, watch the tests go red, make them
 # green). Each test module declares its group with `pytestmark = pytest.mark.group("...")`.
 PENDING: set[str] = {
-    "Phase 3 M1 - ingestion",
-    "Phase 3 M2 - silver (staging) models",
-    "Phase 3 M3 - gold models (the five reports)",
-    "Phase 3 M4 - runner and orchestration",
     "Phase 4 - data-quality checks",
     "Phase 4 - data tests",
     "Phase 6 - AI incident explainer",

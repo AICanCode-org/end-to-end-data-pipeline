@@ -16,10 +16,6 @@ os.environ.setdefault("AIRFLOW__CORE__LOAD_EXAMPLES", "False")
 os.environ.setdefault("AIRFLOW__CORE__UNIT_TEST_MODE", "True")
 
 PENDING: set[str] = {
-    "Phase 3 M1 - ingestion",
-    "Phase 3 M2 - silver (staging) models",
-    "Phase 3 M3 - gold models (the five reports)",
-    "Phase 3 M4 - runner and orchestration",
     "Phase 4 - data-quality checks",
     "Phase 4 - data tests",
     "Phase 6 - AI incident explainer",

@@ -14,6 +14,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
 
@@ -23,11 +24,20 @@ def partition_dir(lake: Path, source: str, key: str, day: dt.date) -> Path:
 
 def write_partition(target: Path, files: dict[str, bytes]) -> None:
     """Replace directory `target` with exactly `files` ({name: content}); readers never see a half-written one."""
-    # TODO(Phase 3 M1): implement write_partition.
-    # Idempotent and atomic: write every file into a temporary sibling directory first, then swap it into place
-    # (remove the old partition, os.replace the new one). A re-run of the same day must give identical files.
-    # JSON lines: json.dumps(row, sort_keys=True, ensure_ascii=False), one per line, in the order given.
-    raise NotImplementedError("Phase 3 M1: write_partition (see the TODO above)")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+    old = target.with_name(f".{target.name}.old-{os.getpid()}")
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir()
+    for name, content in files.items():
+        with (tmp / name).open("wb") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+    if target.exists():
+        target.rename(old)
+    tmp.rename(target)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def jsonl(rows: list[dict]) -> bytes:

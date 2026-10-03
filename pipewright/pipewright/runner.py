@@ -7,10 +7,12 @@ laptops without Airflow.
 from __future__ import annotations
 
 import datetime as dt
+import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 
-from . import explainer, ingest
+from . import dq, explainer, ingest, transform, warehouse
 from .config import Settings
 
 
@@ -36,10 +38,18 @@ def write_incident(settings: Settings, day: dt.date, report: dict) -> Path:
 
 def build_and_publish(settings: Settings, day: dt.date, log: Callable[[str], None] = print) -> dict:
     """Transform, check and publish the warehouse as of `day` (everything in the lake up to that date)."""
-    # TODO(Phase 3 M4): implement build_and_publish.
-    # transform.run -> dq.run -> if the report is publishable: warehouse.publish, else write_incident and raise
-    # RunFailed. Log one line per step (use `log`, not print, so the CLI and tests can capture it).
-    raise NotImplementedError("Phase 3 M4: build_and_publish (see the TODO above)")
+    t0 = time.time()
+    transform.run(settings, day)
+    log(f"[{day}] transform ({settings.track}): built {settings.build_warehouse.name}")
+    report = dq.run(settings, day)
+    s = report["summary"]
+    log(f"[{day}] dq: {s['passed']}/{s['checks']} passed, {s['failed_error']} blocking, {s['failed_warn']} warnings")
+    if not s["publishable"]:
+        path = write_incident(settings, day, report)
+        raise RunFailed(f"[{day}] blocking data-quality failures: not published (incident note: {path})", report)
+    warehouse.publish(settings)
+    log(f"[{day}] published {settings.warehouse} (build + checks {time.time() - t0:.1f}s)")
+    return s
 
 
 def run_range(settings: Settings, days: list[dt.date], log: Callable[[str], None] = print) -> dict:
@@ -47,7 +57,10 @@ def run_range(settings: Settings, days: list[dt.date], log: Callable[[str], None
 
     A v1.0 build is a full rebuild from the lake, so building every intermediate day of a backfill would give
     the same final warehouse, only slower."""
-    # TODO(Phase 3 M4): implement run_range.
-    # Ingest every day in order (ingest_day), then build_and_publish once, as of the last day (a v1.0 build is a
-    # full rebuild from the lake). Write reports/last-run.json with start, end, track, loads, rows and the dq summary.
-    raise NotImplementedError("Phase 3 M4: run_range (see the TODO above)")
+    loads = [r.as_dict() for d in days for r in ingest_day(settings, d, log)]
+    summary = {"start": days[0].isoformat(), "end": days[-1].isoformat(), "track": settings.track,
+               "loads": len(loads), "rows": sum(r["rows"] for r in loads)}
+    summary["dq"] = build_and_publish(settings, days[-1], log)
+    settings.reports_dir.mkdir(parents=True, exist_ok=True)
+    (settings.reports_dir / "last-run.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    return summary

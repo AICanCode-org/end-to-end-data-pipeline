@@ -19,3 +19,15 @@ Schemas, your own code, error messages and aggregates are fine.
 ---
 
 ## Entries
+
+### 2026-08-03 · Phase 0 · Java for PySpark on WSL
+* **Tool / model:** Gemini 2.5 Flash (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 1 of Phase 0 with the output of `scripts/doctor.sh` (Python 3.12 found, Java missing).
+* **What it produced:** `sudo apt install default-jdk` and an `export JAVA_HOME=...` line for `~/.bashrc`.
+* **What I kept / changed / rejected, and why:** changed to `openjdk-21-jre-headless`: `default-jdk` pulls a full
+  JDK and on some Ubuntu releases a Java version PySpark 4.2 does not support; a JRE is enough to run Spark. Rejected
+  the hard-coded `JAVA_HOME` path (it did not exist on my machine; Spark finds `java` on the PATH).
+* **How I verified it:** `java -version` (21), the one-line `SparkSession` check from Step 0.2, `scripts/doctor.sh` green.
+* **Time saved / lost (honest guess):** saved ~15 minutes.
+* **What I learned:** check a generic install answer against the project's pinned versions before running it.

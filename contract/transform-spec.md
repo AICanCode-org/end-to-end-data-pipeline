@@ -1,9 +1,13 @@
-# Transformation spec (contract 1.0.0)
+# Transformation spec (contract 1.1.0)
 
 The business rules both tracks implement, numbered so code can cite them (`-- §3.1 …`, `"""§4.2"""`). The data
 contract (`data-contract.yaml`) says **what** the tables look like; this page says **how** each value is computed.
 When a rule here and the code disagree, the code is wrong. Change a rule with a pull request that updates this page,
 the contract version, the golden files and both tracks together.
+
+**Changes in 1.1.0** (additive; 1.0.0 is in `history/`): order status `rto` (§3.1, §4.4, §5), channel `influencer`,
+coupons: `discount_paise` and `net_paise` in `fct_orders` (§3.1, §4.3), the optional spend column `campaign_id`
+(§3.5), incremental builds (§6). On 1.0 data every 1.1 rule gives exactly the 1.0 tables.
 
 ## 1. Conventions
 - **Business date** = an IST calendar day (Asia/Kolkata, UTC+05:30, no daylight saving). "Run date" = the last
@@ -33,6 +37,8 @@ holds several versions. Keep **the latest version** per `order_id`: highest `upd
 `dt`. Drop test orders. `status` and `payment_method` lower-cased and trimmed; `created_at_utc`, `updated_at_utc`
 via §2; `order_date = ist_date(created_at_utc)`. `city`, `region` from the `city_map` seed on
 `lower(trim(ship_city))`; a spelling not in the seed → `'Unknown'` for both. Keep the nested `items` array for §3.2.
+1.1: `coupon_code` (NULL when absent) and `discount_paise` (0 when absent: orders before 2026-09-15 have neither
+field). `rto` (return to origin: an undelivered order sent back) is a final status like `cancelled`.
 
 ### 3.2 `stg_order_items`
 One row per element of the latest order version's `items`, **only if `qty > 0`** (zero and negative quantities are
@@ -50,7 +56,9 @@ always with identical content. Keep one row per `event_id` (the first delivery).
 `occurred_at_utc` via §2 and `event_date` its IST date; `period_start`/`period_end` are dates (subscriptions only).
 
 ### 3.5 `stg_marketing_spend`
-One row per (`spend_date`, `channel`): `spend_paise = to_paise(spend)`, channel lower-cased and trimmed. If a day's
+One row per (`spend_date`, `channel`): `spend_paise = to_paise(spend)`, channel lower-cased and trimmed. The optional
+`campaign_id` column (1.1, appended at the end of the CSV) is not used; files with and without it are read together
+by column name. If a day's
 file is delivered again (a correction), the latest delivery (`dt`) wins. Ignore rows dated after the run date.
 
 ### 3.6 `stg_products`
@@ -69,11 +77,13 @@ One row per kept order line (§3.2) with the order's `order_date`, `region`, `st
 
 ### 4.3 `fct_orders`
 One row per (non-test) order in its latest state: the §3.1 columns plus `items_count`, `units`, `gross_paise` from
-its kept lines (0 when it has none) and `is_revenue = status ∈ {placed, shipped, delivered}`.
+its kept lines (0 when it has none) and `is_revenue = status ∈ {placed, shipped, delivered}`. 1.1, appended at the end:
+`discount_paise` (§3.1) and `net_paise = gross_paise - discount_paise` (a coupon never exceeds the order: checked by
+`discount_within_gross`). Revenue in the reports stays gross: net revenue is a separate column, not a changed rule.
 
 ### 4.4 `dim_customers`
 Every (non-test) customer (§3.3) with `first_order_date` = the `order_date` of their first **valid** order and
-`valid_orders` = how many they have. A valid order is any order that is not `cancelled`. No valid order →
+`valid_orders` = how many they have. A valid order is any order that is not `cancelled` or `rto`. No valid order →
 `first_order_date` NULL, `valid_orders` 0.
 
 ## 5. Gold: the CEO's five reports
@@ -107,3 +117,18 @@ A customer's cohort is the month of their first valid order (ordered by `created
 `first order_date + 30 <= run_date` (immature customers are neither retained nor lost yet). Per cohort month:
 `customers`, `mature_customers`, `retained_30d` (mature and retained), `retention_rate = retained_30d /
 mature_customers` (a double; NULL with no mature customer).
+
+## 6. Incremental builds (1.1)
+A daily build may be **incremental**: it starts from the previously published warehouse and rebuilds only what can
+have changed. It must give exactly the tables of a full rebuild of the same lake (`scripts/incremental-check.sh`).
+- **Facts** (`fct_order_items`, `fct_orders`): rebuild every order with `ist_date(updated_at_utc) >= since`, where
+  `since = run_date - lookback_days` (`monitoring.incremental.lookback_days`, 3) unless given (`--since`, backfills),
+  **plus** every order that has a line with category `unknown` in the previous facts (a product that arrives in the
+  catalogue later than its first order). The rebuilt orders replace all their previous lines (delete + insert by
+  `order_id`: an order can lose a line); every other order keeps its previous rows.
+- **Everything else** (silver, dimensions, the five reports) is rebuilt in full every time: it is small and depends on
+  whole history windows (30 days, cohorts, month ends).
+- **Full refresh** instead when: there is no published warehouse; it was built under another contract version or by
+  the other track; or `--full-refresh` is given.
+- **Backfill** `D1..D2`: re-ingest the range, then build as of the later of D2 and the published date with
+  `since = min(D1, end - lookback_days)`.

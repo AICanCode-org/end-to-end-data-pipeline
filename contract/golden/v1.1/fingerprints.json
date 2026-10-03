@@ -1,0 +1,38 @@
+{
+ "dim_customers": {
+  "rows": 6647,
+  "sha256": "ff044e5ce90d78f052d11e1f349fdb76d6352ac38bdeb9458fbc0b6f83e5ff65"
+ },
+ "dim_products": {
+  "rows": 108,
+  "sha256": "57378284a1c2cacfc2d91f39cdf961afed91888907ac722ec5287354e07a0ca4"
+ },
+ "fct_order_items": {
+  "rows": 34446,
+  "sha256": "2a9ceb579d9c4a013a783d70bb7210ef7df1c57d5b78e4fd332e4cd9ff52b3b1"
+ },
+ "fct_orders": {
+  "rows": 18314,
+  "sha256": "e9fd1c247994dceb150d90b19aa1bfaf3d5d42800bc66cfa27b0096aa3423b05"
+ },
+ "mart_cac_monthly": {
+  "rows": 21,
+  "sha256": "e5a0a76f0195ad08398e9458086c0ca8fc5bcc6c01cea7beb30c8c123531c2cf"
+ },
+ "mart_cohort_retention": {
+  "rows": 4,
+  "sha256": "b40a6f6b06b30a1f7b27fe3eb4d6e3639502c35c26da78bbde5459879b208685"
+ },
+ "mart_mrr_monthly": {
+  "rows": 4,
+  "sha256": "6cca66d49e13daf6b06a22bbcbdedbbe351842b14ffc47bddf0ce5ae040b4969"
+ },
+ "mart_revenue_daily": {
+  "rows": 2977,
+  "sha256": "ce40881cb4ffc898aee1aa45532aa6027c49c0c6473b3e57fbdd24cbcb63d509"
+ },
+ "mart_top_products_30d": {
+  "rows": 10,
+  "sha256": "7b129b3bec4c0dac5014ba341639efd6f58f7cefbca5dae1db44d2b43456f795"
+ }
+}

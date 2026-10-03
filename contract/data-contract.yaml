@@ -1,7 +1,10 @@
-# Pipewright data contract 1.0.0: what each source must send, where it lands in the lake, and what every gold
-# table must look like. Read by the pipewright package (ingestion + checks), the dbt project (sources, contracts)
-# and the PySpark track. Change it with a pull request and a version bump (see spec/adr/0006 in v1.1).
-version: "1.0.0"
+# Pipewright data contract 1.1.0: what each source must send, where it lands in the lake, and what every gold
+# table must look like. Read by the pipewright package (ingestion, checks, monitoring), the dbt project and the
+# PySpark track. Change it with a pull request and a version bump (spec/adr/0006). 1.0.0 is in contract/history/.
+# 1.1.0 (additive, backward compatible): order status `rto`, channel `influencer`, optional order fields
+# coupon_code / discount_paise (from 2026-09-15), optional spend column campaign_id, fct_orders.discount_paise and
+# net_paise (appended), freshness / volume / SLA expectations for monitoring.
+version: "1.1.0"
 timezone: Asia/Kolkata          # business dates are IST calendar days
 money: integer paise            # ₹1 = 100 paise; never floats for money
 
@@ -13,6 +16,7 @@ sources:
     cursor: updated_at          # incremental extraction window on updated_at, [D 00:00 IST, D+1 00:00 IST)
     primary_key: order_id
     required: [order_id, customer_id, status, created_at, updated_at, ship_city, payment_method, is_test, items]
+    optional: [coupon_code, discount_paise]   # 1.1.0: sent from 2026-09-15; absent = no coupon, discount 0
     pii_drop: []
   customers:
     kind: api
@@ -36,6 +40,7 @@ sources:
     partition_key: dt
     primary_key: [date, channel]
     required: [date, channel, spend, currency]
+    optional: [campaign_id]     # 1.1.0; new CSV columns may only be appended at the end
   products:
     kind: file
     format: csv
@@ -45,9 +50,9 @@ sources:
     required: [sku, name, category, price_inr, active]
 
 enums:
-  order_status: [placed, shipped, delivered, cancelled, returned]
+  order_status: [placed, shipped, delivered, cancelled, returned, rto]   # rto (1.1.0): return to origin, undelivered
   revenue_status: [placed, shipped, delivered]
-  channel: [google_ads, meta_ads, affiliates, referral, organic]
+  channel: [google_ads, meta_ads, affiliates, referral, organic, influencer]   # influencer: 1.1.0
   region: [North, South, East, West, Unknown]
   category: [kitchen, cookware, storage, cleaning, decor, appliances, unknown]
   plan: [prime_monthly, prime_annual]
@@ -65,7 +70,8 @@ gold:
     key: [order_id]
     columns: {order_id: VARCHAR, customer_id: VARCHAR, order_date: DATE, created_at_utc: TIMESTAMP,
               updated_at_utc: TIMESTAMP, status: VARCHAR, city: VARCHAR, region: VARCHAR, payment_method: VARCHAR,
-              items_count: BIGINT, units: BIGINT, gross_paise: BIGINT, is_revenue: BOOLEAN}
+              items_count: BIGINT, units: BIGINT, gross_paise: BIGINT, is_revenue: BOOLEAN,
+              discount_paise: BIGINT, net_paise: BIGINT}       # the last two: 1.1.0 (appended, never inserted)
   fct_order_items:
     key: [order_id, line_number]
     columns: {order_id: VARCHAR, line_number: INTEGER, order_date: DATE, sku: VARCHAR, category: VARCHAR,
@@ -108,3 +114,24 @@ checks:
   - {id: retention_is_a_rate, kind: expression, table: mart_cohort_retention,
      expect: "retention_rate IS NULL OR retention_rate BETWEEN 0 AND 1", severity: error}
   - {id: cac_non_negative, kind: expression, table: mart_cac_monthly, expect: "cac_paise IS NULL OR cac_paise >= 0", severity: error}
+  - {id: discount_within_gross, kind: expression, table: fct_orders,
+     expect: "discount_paise BETWEEN 0 AND gross_paise AND net_paise = gross_paise - discount_paise", severity: error}
+
+# 1.1.0 monitoring (`pipewright monitor`): is the data fresh, is the volume plausible, did we meet the SLA?
+monitoring:
+  freshness:                    # data for business date D must be there by expected_by (IST, on D+1):
+    #                             file sources: the drop file has arrived (before the 06:00 run even starts);
+    #                             API sources: the day's partition is in the lake (the run has ingested it)
+    orders: {expected_by: "06:15", severity: error}
+    customers: {expected_by: "06:15", severity: error}
+    payments: {expected_by: "05:00", severity: error}
+    marketing_spend: {expected_by: "05:00", severity: warn}
+    products: {expected_by: "05:00", severity: warn}
+  volume:                       # rows of the day's partition vs the median of the previous 7 days
+    orders: {min_ratio: 0.5, max_ratio: 2.0, severity: warn}
+    payments: {min_ratio: 0.5, max_ratio: 2.0, severity: warn}
+  sla:
+    publish_by: "06:30"         # IST on D+1: the CEO opens the dashboard at 07:00
+    severity: error
+  incremental:
+    lookback_days: 3            # incremental builds rebuild orders updated in the last 3 days (late updates)

@@ -1,0 +1,110 @@
+# Pipewright data contract 1.0.0: what each source must send, where it lands in the lake, and what every gold
+# table must look like. Read by the pipewright package (ingestion + checks), the dbt project (sources, contracts)
+# and the PySpark track. Change it with a pull request and a version bump (see spec/adr/0006 in v1.1).
+version: "1.0.0"
+timezone: Asia/Kolkata          # business dates are IST calendar days
+money: integer paise            # ₹1 = 100 paise; never floats for money
+
+sources:
+  orders:
+    kind: api
+    endpoint: /v1/orders
+    partition_key: dt           # lake/raw/orders/dt=YYYY-MM-DD/part-0000.jsonl
+    cursor: updated_at          # incremental extraction window on updated_at, [D 00:00 IST, D+1 00:00 IST)
+    primary_key: order_id
+    required: [order_id, customer_id, status, created_at, updated_at, ship_city, payment_method, is_test, items]
+    pii_drop: []
+  customers:
+    kind: api
+    endpoint: /v1/customers
+    partition_key: dt
+    cursor: updated_at
+    primary_key: customer_id
+    required: [customer_id, signup_at, acquisition_channel, is_test, city, updated_at]
+    pii_drop: [email, phone]    # dropped before anything is written: the lake never stores them
+  payments:
+    kind: file
+    format: jsonl
+    pattern: "payments/payments_{date}.jsonl"
+    partition_key: dt
+    primary_key: event_id       # at-least-once delivery: the same event can arrive twice
+    required: [event_id, type, customer_id, amount_paise, occurred_at]
+  marketing_spend:
+    kind: file
+    format: csv
+    pattern: "marketing_spend/spend_{date}.csv"
+    partition_key: dt
+    primary_key: [date, channel]
+    required: [date, channel, spend, currency]
+  products:
+    kind: file
+    format: csv
+    pattern: "products/products_{date}.csv"
+    partition_key: dt
+    primary_key: sku
+    required: [sku, name, category, price_inr, active]
+
+enums:
+  order_status: [placed, shipped, delivered, cancelled, returned]
+  revenue_status: [placed, shipped, delivered]
+  channel: [google_ads, meta_ads, affiliates, referral, organic]
+  region: [North, South, East, West, Unknown]
+  category: [kitchen, cookware, storage, cleaning, decor, appliances, unknown]
+  plan: [prime_monthly, prime_annual]
+
+# Gold tables: column -> type (DuckDB names). Both tracks must produce exactly these columns, in this order.
+gold:
+  dim_customers:
+    key: [customer_id]
+    columns: {customer_id: VARCHAR, signup_date: DATE, city: VARCHAR, region: VARCHAR, acquisition_channel: VARCHAR,
+              first_order_date: DATE, valid_orders: BIGINT}
+  dim_products:
+    key: [sku]
+    columns: {sku: VARCHAR, product_name: VARCHAR, category: VARCHAR, price_paise: BIGINT, first_seen_date: DATE}
+  fct_orders:
+    key: [order_id]
+    columns: {order_id: VARCHAR, customer_id: VARCHAR, order_date: DATE, created_at_utc: TIMESTAMP,
+              updated_at_utc: TIMESTAMP, status: VARCHAR, city: VARCHAR, region: VARCHAR, payment_method: VARCHAR,
+              items_count: BIGINT, units: BIGINT, gross_paise: BIGINT, is_revenue: BOOLEAN}
+  fct_order_items:
+    key: [order_id, line_number]
+    columns: {order_id: VARCHAR, line_number: INTEGER, order_date: DATE, sku: VARCHAR, category: VARCHAR,
+              region: VARCHAR, status: VARCHAR, qty: BIGINT, unit_price_paise: BIGINT, line_paise: BIGINT}
+  mart_revenue_daily:
+    key: [order_date, region, category]
+    columns: {order_date: DATE, region: VARCHAR, category: VARCHAR, orders: BIGINT, units: BIGINT, revenue_paise: BIGINT}
+  mart_cac_monthly:
+    key: [month, channel]
+    columns: {month: DATE, channel: VARCHAR, spend_paise: BIGINT, new_customers: BIGINT, cac_paise: BIGINT}
+  mart_mrr_monthly:
+    key: [month]
+    columns: {month: DATE, active_subscriptions: BIGINT, monthly_subscriptions: BIGINT, annual_subscriptions: BIGINT,
+              mrr_paise: BIGINT, new_mrr_paise: BIGINT, churned_mrr_paise: BIGINT}
+  mart_top_products_30d:
+    key: [rank]
+    columns: {as_of_date: DATE, rank: INTEGER, sku: VARCHAR, product_name: VARCHAR, category: VARCHAR, units: BIGINT,
+              revenue_paise: BIGINT}
+  mart_cohort_retention:
+    key: [cohort_month]
+    columns: {cohort_month: DATE, customers: BIGINT, mature_customers: BIGINT, retained_30d: BIGINT,
+              retention_rate: DOUBLE}
+
+# Data-quality checks run by `pipewright dq` on every build before it is published (error = do not publish).
+checks:
+  - {id: orders_not_empty, kind: row_count_min, table: fct_orders, min: 1, severity: error}
+  - {id: status_accepted, kind: accepted_values, table: fct_orders, column: status, values: "@order_status", severity: error}
+  - {id: region_accepted, kind: accepted_values, table: fct_orders, column: region, values: "@region", severity: error}
+  - {id: channel_accepted, kind: accepted_values, table: dim_customers, column: acquisition_channel, values: "@channel", severity: error}
+  - {id: category_accepted, kind: accepted_values, table: fct_order_items, column: category, values: "@category", severity: error}
+  - {id: order_customer_exists, kind: relationship, table: fct_orders, column: customer_id, to: dim_customers.customer_id, severity: error}
+  - {id: item_sku_known, kind: relationship, table: fct_order_items, column: sku, to: dim_products.sku, severity: warn}
+  - {id: unknown_city_rare, kind: max_share, table: fct_orders, where: "region = 'Unknown'", max: 0.01, severity: warn}
+  - {id: gross_non_negative, kind: expression, table: fct_orders, expect: "gross_paise >= 0", severity: error}
+  - {id: gross_equals_lines, kind: reconcile, left: "SELECT sum(gross_paise) FROM fct_orders",
+     right: "SELECT coalesce(sum(line_paise), 0) FROM fct_order_items", severity: error}
+  - {id: revenue_reconciles, kind: reconcile, left: "SELECT sum(revenue_paise) FROM mart_revenue_daily",
+     right: "SELECT coalesce(sum(line_paise), 0) FROM fct_order_items WHERE status IN @revenue_status", severity: error}
+  - {id: top_products_at_most_10, kind: row_count_max, table: mart_top_products_30d, max: 10, severity: error}
+  - {id: retention_is_a_rate, kind: expression, table: mart_cohort_retention,
+     expect: "retention_rate IS NULL OR retention_rate BETWEEN 0 AND 1", severity: error}
+  - {id: cac_non_negative, kind: expression, table: mart_cac_monthly, expect: "cac_paise IS NULL OR cac_paise >= 0", severity: error}

@@ -17,10 +17,7 @@ DAYS = [dt.date(2026, 6, 1), dt.date(2026, 6, 2), dt.date(2026, 6, 3)]
 
 # Tests still to be switched on, one group per milestone (Phase 3: delete a line, watch the tests go red, make them
 # green). Each test module declares its group with `pytestmark = pytest.mark.group("...")`.
-PENDING: set[str] = {
-    "Phase 6 - AI incident explainer",
-    "Phase 6 - dashboard",
-}
+PENDING: set[str] = set()
 
 
 def pytest_configure(config):

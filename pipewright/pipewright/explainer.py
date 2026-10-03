@@ -91,9 +91,23 @@ def template(report: dict, facts: list[str], failed: list[dict]) -> str:
 
 def validate(text: str, facts: list[str]) -> str | None:
     """None if the LLM answer is acceptable, else the reason it is rejected."""
-    # TODO(Phase 6): implement validate.
-    # Return None when the answer is acceptable, else the reason: no [n] citation, a citation of a fact that does
-    # not exist, a number that is in no fact (0-10 are fine), a URL, data-changing SQL, or more than 2500 chars.
+    if not text.strip():
+        return "empty answer"
+    if len(text) > 2500:
+        return "answer too long"
+    cites = [int(n) for n in CITE.findall(text)]
+    if not cites:
+        return "answer cites no fact"
+    if any(n < 1 or n > len(facts) for n in cites):
+        return "answer cites a fact that does not exist"
+    if URL.search(text):
+        return "answer contains a URL"
+    if FORBIDDEN.search(text):
+        return "answer contains data-changing SQL"
+    allowed = set(NUMBER.findall(" ".join(facts))) | {str(i) for i in range(0, 11)}
+    stray = [n for n in NUMBER.findall(CITE.sub("", text)) if n not in allowed]
+    if stray:
+        return f"answer contains numbers not in the facts: {stray[:3]}"
     return None
 
 
@@ -125,13 +139,24 @@ def call_llm(facts: list[str], env: dict[str, str]) -> str:
 
 
 def explain(report: dict, env: dict[str, str] | None = None, extra_facts: list[str] | None = None) -> Explanation:
-    # TODO(Phase 6): implement explain.
-    # facts_from(report) -> template() is always the fallback. Call the model only when AI_PROVIDER=openai, something
-    # failed and AI_BASE_URL + AI_MODEL are set; any provider error or a guardrail rejection -> the template,
-    # with the reason. Until Phase 6 this stub always returns the template.
     env = dict(os.environ if env is None else env)
     facts, failed = facts_from(report, extra_facts)
-    return Explanation(template(report, facts, failed), "template", "the AI explainer is built in Phase 6", facts)
+    fallback = template(report, facts, failed)
+    provider = env.get("AI_PROVIDER", "template")
+    if provider != "openai":
+        return Explanation(fallback, "template", "AI_PROVIDER is not 'openai'", facts)
+    if not failed:
+        return Explanation(fallback, "template", "nothing failed: no need to call a model", facts)
+    if not env.get("AI_BASE_URL") or not env.get("AI_MODEL"):
+        return Explanation(fallback, "template", "AI_BASE_URL or AI_MODEL is not set", facts)
+    try:
+        text = call_llm(facts, env)
+    except (urllib.error.URLError, TimeoutError, ConnectionError, OSError, KeyError, IndexError, ValueError) as exc:
+        return Explanation(fallback, "template", f"provider unavailable ({type(exc).__name__})", facts)
+    problem = validate(text, facts)
+    if problem:
+        return Explanation(fallback, "template", f"guardrail rejected the model's answer: {problem}", facts)
+    return Explanation(text.strip(), "llm", f"model {env['AI_MODEL']}", facts)
 
 
 def render(e: Explanation) -> str:

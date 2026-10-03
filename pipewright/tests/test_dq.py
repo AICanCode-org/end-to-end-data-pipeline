@@ -34,9 +34,9 @@ def test_every_contract_check_passes_on_the_golden_fixture(con):
 
 
 def test_accepted_values_reports_the_unexpected_codes(con):
-    con.execute("UPDATE fct_orders SET status = 'rto' WHERE order_id IN (SELECT order_id FROM fct_orders LIMIT 2)")
+    con.execute("UPDATE fct_orders SET status = 'lost' WHERE order_id IN (SELECT order_id FROM fct_orders LIMIT 2)")
     r = run(con, "status_accepted")
-    assert (r.status, r.observed, r.unexpected_values, r.blocking) == ("fail", 2, ["rto"], True)
+    assert (r.status, r.observed, r.unexpected_values, r.blocking) == ("fail", 2, ["lost"], True)
 
 
 def test_unprintable_values_are_masked(con):

@@ -1,14 +1,15 @@
-"""The `pipewright` command line. Exit codes: 0 ok, 1 checks failed / not published, 2 usage, 3 a file has not
+"""The `pipewright` command line. Exit codes: 0 ok, 1 checks failed / not published / error alerts, 2 usage, 3 a file has not
 arrived (retry later), 4 source API error, 5 contract violation, 6 transformation failed."""
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, dq, explainer, ingest, runner, transform, warehouse
+from . import __version__, config, dq, explainer, ingest, monitor, runner, transform, warehouse
 from .contract import ContractViolation
 from .http import SourceError
 
@@ -38,10 +39,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--source")
     p.add_argument("--all", action="store_true")
     add("check-drops", "exit 3 if a file drop for the date is missing")
-    add("transform", "build silver + gold with the track in PIPEWRIGHT_TRACK")
+    p = add("transform", "build silver + gold with the track in PIPEWRIGHT_TRACK (incremental when possible)")
+    p.add_argument("--full-refresh", action="store_true", help="rebuild everything instead of incrementally")
+    p.add_argument("--since", help="rebuild the orders updated on or after this date (default: date - lookback)")
     add("dq", "run the data-quality checks on the build")
     add("publish", "swap the checked build into place", dates=False)
-    add("run", "ingest + transform + dq + publish for a date or a range")
+    p = add("run", "ingest + transform + dq + publish for a date or a range")
+    p.add_argument("--full-refresh", action="store_true")
+    p = add("backfill", "re-ingest a past range and rebuild everything it touched (--start/--end)")
+    p.add_argument("--full-refresh", action="store_true")
+    p = add("monitor", "freshness / volume / SLA / data-quality checks for a date; alerts on failure")
+    p.add_argument("--now", help="evaluate as of this moment (ISO 8601 with offset), default now")
+    p.add_argument("--json", action="store_true", help="print the results as JSON")
     p = add("explain", "explain the latest data-quality report (AI or template)", dates=False)
     p.add_argument("--report", type=Path)
     p = add("export", "write the published gold tables as canonical CSV", dates=False)
@@ -65,8 +74,11 @@ def main(argv: list[str] | None = None) -> int:
                 return 3
             print("all drops present")
         elif args.cmd == "transform":
+            since = config.parse_date(args.since) if args.since else None
             for day in _days(args):
-                print(f"built {transform.run(settings, day)} ({settings.track}) for {day}")
+                p = transform.plan(settings, day, since, args.full_refresh)
+                transform.run(settings, day, since, args.full_refresh)
+                print(f"built {settings.build_warehouse} ({settings.track}, {'incremental' if p.incremental else 'full'}: {p.reason}) for {day}")
         elif args.cmd == "dq":
             for day in _days(args):
                 report = dq.run(settings, day)
@@ -81,7 +93,26 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "publish":
             print(f"published {warehouse.publish(settings)}")
         elif args.cmd == "run":
-            runner.run_range(settings, _days(args))
+            runner.run_range(settings, _days(args), full_refresh=args.full_refresh)
+        elif args.cmd == "backfill":
+            if not (args.start and args.end):
+                ap.error("backfill needs --start and --end")
+            runner.run_range(settings, _days(args), full_refresh=args.full_refresh, kind="backfill")
+        elif args.cmd == "monitor":
+            now = dt.datetime.fromisoformat(args.now) if args.now else None
+            if now is not None and now.tzinfo is None:
+                ap.error("--now needs a UTC offset, e.g. 2026-09-21T06:45+05:30")
+            worst = 0
+            for day in _days(args):
+                results, alerts = monitor.run(settings, day, now)
+                if args.json:
+                    print(json.dumps({"run_date": str(day), "results": monitor.as_dicts(results), "alerts": alerts}))
+                else:
+                    for r in results:
+                        print(f"{day} {r.status.upper():7} {r.severity:5} {r.check_id}: {r.detail}")
+                if any(a["severity"] == "error" for a in alerts):
+                    worst = 1
+            return worst
         elif args.cmd == "explain":
             path = args.report or max(settings.reports_dir.glob("dq-*.json"), default=None)
             if path is None:

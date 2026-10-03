@@ -18,7 +18,7 @@ pytestmark = pytest.mark.group("Phase 3 M4 - runner and orchestration")
 def fake_track(monkeypatch):
     calls = []
 
-    def fake_run(settings, day):
+    def fake_run(settings, day, *_args, **_kwargs):
         calls.append(day)
         return golden_warehouse(settings.build_warehouse)
 
@@ -46,10 +46,10 @@ def test_run_range_ingests_every_day_then_builds_once(env, fake_track):
 
 @pytest.mark.group("Phase 4 - data-quality checks")  # needs the real checks
 def test_blocking_failure_writes_an_incident_note_and_does_not_publish(env, monkeypatch):
-    def broken(settings, day):
+    def broken(settings, day, *_args, **_kwargs):
         golden_warehouse(settings.build_warehouse)
         con = duckdb.connect(str(settings.build_warehouse))
-        con.execute("UPDATE gold.fct_orders SET status = 'rto'")
+        con.execute("UPDATE gold.fct_orders SET status = 'lost'")
         con.close()
 
     monkeypatch.setattr(transform, "run", broken)
@@ -114,7 +114,7 @@ def test_cli_exit_codes(env, monkeypatch, tmp_path, capsys):
 
 
 def test_cli_transform_failure_exit_code(env, monkeypatch):
-    def boom(settings, day):
+    def boom(settings, day, *_args, **_kwargs):
         raise transform.TransformError("sql track failed (exit 1)")
 
     monkeypatch.setattr(transform, "run", boom)
@@ -138,6 +138,6 @@ def test_transform_commands(env):
 
 
 def test_transform_failure_shows_the_tail_of_the_log(env, monkeypatch):
-    monkeypatch.setattr(transform, "command", lambda s, d: (["python3", "-c", "import sys; print('boom'); sys.exit(3)"], {}, FIXTURE))
+    monkeypatch.setattr(transform, "command", lambda s, d, *_: (["python3", "-c", "import sys; print('boom'); sys.exit(3)"], {}, FIXTURE))
     with pytest.raises(transform.TransformError, match="exit 3"):
         transform.run(env, DAYS[0])

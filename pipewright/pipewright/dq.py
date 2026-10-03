@@ -18,6 +18,7 @@ from pathlib import Path
 import duckdb
 
 from . import contract as contract_mod
+from . import monitor
 from .config import Settings
 from .transform import command
 
@@ -121,6 +122,7 @@ def run(settings: Settings, day: dt.date, db: Path | None = None) -> dict:
         results += dbt_test_results(settings, day)
     report = make_report(settings, day, c["version"], results)
     save(settings, db, report)
+    monitor.record_dq(settings, report)
     return report
 
 

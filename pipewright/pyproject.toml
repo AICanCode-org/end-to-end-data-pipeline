@@ -1,6 +1,6 @@
 [project]
 name = "pipewright"
-version = "1.0.0"
+version = "1.1.0"
 description = "Pipewright: the shared pipeline code (ingestion, runner, data-quality checks, AI incident explainer)"
 requires-python = ">=3.11"
 dependencies = ["duckdb==1.5.6", "pyyaml==6.0.3"]

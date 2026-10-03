@@ -14,12 +14,18 @@ DAGS = Path(__file__).resolve().parents[1] / "dags"
 
 
 @pytest.fixture(scope="module")
-def dag():
+def module():
     """Import the DAG file the way the scheduler would (any exception here = an import error in the UI)."""
     spec = importlib.util.spec_from_file_location("pipewright_daily", DAGS / "pipewright_daily.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.dag.validate()
+    module.watch.validate()
+    return module
+
+
+@pytest.fixture(scope="module")
+def dag(module):
     return module.dag
 
 
@@ -34,12 +40,24 @@ def test_schedule_is_0600_ist(dag):
 
 def test_task_graph(dag):
     ingests = {f"ingest_{s}" for s in ("orders", "customers", "payments", "marketing_spend", "products")}
-    assert set(dag.task_dict) == {"check_drops", "transform", "dq", "publish", *ingests}
+    assert set(dag.task_dict) == {"check_drops", "transform", "dq", "publish", "monitor", *ingests}
     assert dag.get_task("check_drops").downstream_task_ids == ingests
     for t in ingests:
         assert dag.get_task(t).downstream_task_ids == {"transform"}
     assert dag.get_task("transform").downstream_task_ids == {"dq"}
     assert dag.get_task("dq").downstream_task_ids == {"publish"}
+    assert dag.get_task("publish").downstream_task_ids == {"monitor"}
+
+
+@pytest.mark.group("Phase 7 - monitoring")
+def test_monitor_always_runs_and_watch_dag(module):
+    """1.1: monitoring runs even when the build failed, and a separate watch DAG checks before and after the run."""
+    monitor = module.dag.get_task("monitor")
+    assert monitor.trigger_rule == "all_done" and monitor.retries == 0
+    assert monitor.bash_command.startswith("pipewright monitor --date ")
+    watch = module.watch
+    assert watch.timetable.serialize()["expression"] == "15 0,1 * * *"  # 05:45 and 06:45 IST
+    assert set(watch.task_dict) == {"monitor"} and watch.catchup is False
 
 
 def test_quality_gate_is_not_retried(dag):

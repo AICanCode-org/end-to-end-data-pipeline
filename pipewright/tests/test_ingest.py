@@ -67,7 +67,7 @@ def test_manifest_and_state(settings):
     for d in (DAYS[1], DAYS[0]):  # a backfill of an older day must not move the high-water mark back
         ingest.ingest_api(settings, "orders", d)
     manifest = json.loads((settings.lake_dir / "_manifests" / "orders" / f"{DAYS[0]}.json").read_text())
-    assert manifest["contract_version"] == "1.0.0" and manifest["rows"] > 0 and len(manifest["sha256"]) == 64
+    assert manifest["contract_version"] == "1.1.0" and manifest["loaded_at"].endswith("+00:00") and manifest["rows"] > 0 and len(manifest["sha256"]) == 64
     assert lake.read_state(settings.lake_dir, "orders")["last_loaded_date"] == str(DAYS[1])
     assert lake.partitions(settings.lake_dir, "orders") == [DAYS[0], DAYS[1]]
 

@@ -56,6 +56,7 @@ def write_json(path: Path, obj: dict) -> None:
 
 
 def write_manifest(lake: Path, source: str, day: dt.date, manifest: dict) -> Path:
+    manifest = {**manifest, "loaded_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds")}  # 1.1: for monitoring
     path = lake / "_manifests" / source / f"{day.isoformat()}.json"
     write_json(path, manifest)
     return path

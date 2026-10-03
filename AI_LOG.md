@@ -126,3 +126,29 @@ Schemas, your own code, error messages and aggregates are fine.
   (sql + parity ran); `actionlint` clean.
 * **Time saved / lost (honest guess):** saved ~15 minutes.
 * **What I learned:** CI changes need a test PR like any other code.
+
+### 2026-08-26 · Phase 6 · Red-teaming the explainer
+* **Tool / model:** Claude (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 1 of Phase 6 with my `validate()`.
+* **What it produced:** 10 answers that should be rejected, including numbers written as words ("forty-one rows"),
+  a domain without `http`, and `DELETE` inside a code block; 3 good answers that cite facts with ranges ("[1]-[3]").
+* **What I kept / changed / rejected, and why:** added 7 as tests; 5 already failed validation, 2 passed it (the
+  bare domain and SQL in a code block) and I fixed the patterns. Kept "forty-one" passing: the guardrail is about
+  invented numbers, and spelling out a fact's number is harmless; documented the choice.
+* **How I verified it:** `pipewright/tests/test_explainer.py` with the fake LLM in `numbers` and `url` modes; the
+  Docker check's "AI provider unreachable" step falls back to the template and the fake key appears in 0 log lines.
+* **Time saved / lost (honest guess):** saved ~45 minutes.
+* **What I learned:** guardrails need adversarial tests, and the template fallback is the real safety net.
+
+### 2026-08-28 · Phase 6 · A read-only container and Spark
+* **Tool / model:** Gemini 2.5 Flash (free tier)
+* **Prompt (summary or paste):**
+  > The PySpark container fails with `UnsatisfiedLinkError ... snappy` under `read_only: true`. Why?
+* **What it produced:** remove `read_only`, or run as root.
+* **What I kept / changed / rejected, and why:** rejected both. Spark unpacks the snappy native library into
+  `/tmp`; the tmpfs was mounted `noexec`. Mounted `/tmp` with `exec` for that one service and kept the rest hardened.
+* **How I verified it:** `scripts/docker-check.sh`: pyspark pipeline in the container, parity with the SQL container,
+  `uid 10001`, read-only root file system.
+* **Time saved / lost (honest guess):** lost ~30 minutes.
+* **What I learned:** "turn off the security setting" is never the fix; find the one permission really needed.

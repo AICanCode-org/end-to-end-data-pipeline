@@ -15,10 +15,7 @@ os.environ.setdefault("AIRFLOW_HOME", _home)
 os.environ.setdefault("AIRFLOW__CORE__LOAD_EXAMPLES", "False")
 os.environ.setdefault("AIRFLOW__CORE__UNIT_TEST_MODE", "True")
 
-PENDING: set[str] = {
-    "Phase 6 - AI incident explainer",
-    "Phase 6 - dashboard",
-}
+PENDING: set[str] = set()
 
 
 def pytest_configure(config):

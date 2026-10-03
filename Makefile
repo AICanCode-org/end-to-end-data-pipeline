@@ -6,16 +6,16 @@ AIRFLOW_PY ?= .venv-airflow/bin/python
 TRACK ?= sql
 AIRFLOW_CONSTRAINTS := https://raw.githubusercontent.com/apache/airflow/constraints-3.3.2/constraints-3.12.txt
 
-.PHONY: help setup setup-airflow install-pipewright install-sql install-pyspark \
-        lint lint-pipewright lint-sql lint-pyspark test test-pipewright test-sql test-pyspark test-orchestration parity \
-        source run check
+.PHONY: help setup setup-airflow install-pipewright install-sql install-pyspark install-dashboard \
+        lint lint-pipewright lint-sql lint-pyspark test test-pipewright test-sql test-pyspark test-orchestration test-dashboard parity \
+        source run dashboard up down check
 
 help: ## list the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-20s %s\n", $$1, $$2}'
 
 setup: ## create .venv with everything except Airflow (Python 3.12; the PySpark track also needs Java 17+)
 	python3.12 -m venv .venv
-	$(MAKE) install-sql install-pyspark PY=$(abspath .venv/bin/python)
+	$(MAKE) install-sql install-pyspark install-dashboard PY=$(abspath .venv/bin/python)
 
 install-pipewright: ## the shared package (editable) + its test tools, into $(PY)
 	$(PY) -m pip install -r pipewright/requirements-dev.txt -e pipewright
@@ -25,6 +25,9 @@ install-sql: install-pipewright ## + dbt-duckdb and sqlfluff
 
 install-pyspark: install-pipewright ## + PySpark (needs Java 17+ on PATH)
 	$(PY) -m pip install -r tracks/pyspark/requirements-dev.txt
+
+install-dashboard: install-pipewright ## + Streamlit
+	$(PY) -m pip install -r dashboard/requirements-dev.txt
 
 setup-airflow: ## a separate .venv-airflow for the DAG tests (Airflow's pins never mix with dbt's)
 	python3.12 -m venv .venv-airflow
@@ -54,7 +57,10 @@ test-pyspark: ## PySpark track: same expected files, plus unit tests (coverage >
 test-orchestration: ## the Airflow DAG (needs make setup-airflow)
 	cd orchestration && $(abspath $(AIRFLOW_PY)) -m pytest tests -q
 
-test: test-pipewright test-sql test-pyspark ## every suite except the DAG
+test-dashboard: ## the Streamlit dashboard
+	cd dashboard && $(PY) -m pytest --cov
+
+test: test-pipewright test-sql test-pyspark test-dashboard ## every suite except the DAG
 
 parity: ## full data through both tracks: identical gold tables, equal to contract/golden
 	PY=$(PY) scripts/parity-run.sh 1.0
@@ -65,5 +71,14 @@ source: ## generate the source data and serve the API stub on :18140 (Ctrl-C to 
 
 run: ## the whole backfill with TRACK=sql|pyspark against the running stub (make source in another terminal)
 	PIPEWRIGHT_TRACK=$(TRACK) PYTHONPATH=tracks/pyspark$${PYTHONPATH:+:$$PYTHONPATH} $(PY) -m pipewright run --start 2026-06-01 --end 2026-08-31
+
+dashboard: ## the dashboard on :18142, reading warehouse/pipewright.duckdb
+	$(PY) -m streamlit run dashboard/app.py --server.port 18142
+
+up: ## Docker: source + dashboard; then: docker compose --profile pipeline run --rm pipeline-sql run --start ... --end ...
+	docker compose up -d --build
+
+down: ## Docker: stop everything and delete the volumes
+	docker compose --profile pipeline --profile airflow down -v --remove-orphans
 
 check: lint test parity ## what CI checks, in one go

@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.coverage.run]
+source = ["data"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true

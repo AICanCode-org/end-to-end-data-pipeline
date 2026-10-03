@@ -1,9 +1,5 @@
 -- The product catalogue (§3.6): the latest daily snapshot on or before run_date, plus the first date each SKU
 -- appeared in any snapshot.
--- TODO(Phase 3 M2): implement stg_products.
--- §3.6: the latest catalogue snapshot on or before run_date + the first date each SKU
--- appeared; category lower-cased with 'é' -> 'e'; price in paise.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
 with snapshots as (
     select
         *,
@@ -17,13 +13,27 @@ with snapshots as (
             union_by_name = true
         )
     where cast(dt as date) <= {{ run_date() }}
+),
+
+first_seen as (
+    select
+        sku,
+        min(snapshot_date) as first_seen_date
+    from snapshots
+    group by sku
+),
+
+latest_day as (
+    select max(snapshot_date) as snapshot_date
+    from snapshots
 )
 
 select
-    cast(null as varchar) as sku,
-    cast(null as varchar) as product_name,
-    cast(null as varchar) as category,
-    cast(null as bigint) as price_paise,
-    cast(null as date) as first_seen_date
+    snapshots.sku,
+    trim(snapshots.name) as product_name,
+    translate(lower(trim(snapshots.category)), 'é', 'e') as category,
+    {{ to_paise('snapshots.price_inr') }} as price_paise,
+    first_seen.first_seen_date
 from snapshots
-where false
+inner join latest_day on snapshots.snapshot_date = latest_day.snapshot_date
+inner join first_seen on snapshots.sku = first_seen.sku

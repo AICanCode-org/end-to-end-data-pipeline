@@ -1,13 +1,21 @@
 -- §4.4 One row per (non-test) customer, with the date of their first valid (not cancelled) order.
--- TODO(Phase 3 M3): implement dim_customers.
--- §4.4: every customer + first_order_date and valid_orders (orders not cancelled).
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
+with valid as (
+    select
+        customer_id,
+        min(order_date) as first_order_date,
+        count(*) as valid_orders
+    from {{ ref('fct_orders') }}
+    where status != 'cancelled'
+    group by customer_id
+)
+
 select
-    cast(null as varchar) as customer_id,
-    cast(null as date) as signup_date,
-    cast(null as varchar) as city,
-    cast(null as varchar) as region,
-    cast(null as varchar) as acquisition_channel,
-    cast(null as date) as first_order_date,
-    cast(null as bigint) as valid_orders
-where false
+    customers.customer_id,
+    customers.signup_date,
+    customers.city,
+    customers.region,
+    customers.acquisition_channel,
+    valid.first_order_date,
+    coalesce(valid.valid_orders, 0) as valid_orders
+from {{ ref('stg_customers') }} as customers
+left join valid on customers.customer_id = valid.customer_id

@@ -1,9 +1,5 @@
 -- One row per payment event (§3.4). Delivery is at-least-once: the same event_id can appear twice in one file
 -- or again in the next day's file, always with identical content, so we keep the first delivery.
--- TODO(Phase 3 M2): implement stg_payments.
--- §3.4: one row per event_id (the drops re-send some events: keep the first delivery),
--- occurred_at in UTC + its IST event_date; subscription periods as DATE.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
 with raw as (
     select *
     from
@@ -25,19 +21,24 @@ with raw as (
             }
         )
     where cast(dt as date) <= {{ run_date() }}
+),
+
+deduped as (
+    select *
+    from raw
+    qualify row_number() over (partition by event_id order by cast(dt as date)) = 1
 )
 
 select
-    cast(null as varchar) as event_id,
-    cast(null as varchar) as event_type,
-    cast(null as varchar) as customer_id,
-    cast(null as varchar) as order_id,
-    cast(null as varchar) as subscription_id,
-    cast(null as varchar) as plan,
-    cast(null as bigint) as amount_paise,
-    cast(null as timestamp) as occurred_at_utc,
-    cast(null as date) as event_date,
-    cast(null as date) as period_start,
-    cast(null as date) as period_end
-from raw
-where false
+    event_id,
+    type as event_type,
+    customer_id,
+    order_id,
+    subscription_id,
+    plan,
+    amount_paise,
+    {{ utc_timestamp('occurred_at') }} as occurred_at_utc,
+    {{ ist_date(utc_timestamp('occurred_at')) }} as event_date,
+    period_start,
+    period_end
+from deduped

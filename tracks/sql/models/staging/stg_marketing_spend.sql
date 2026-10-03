@@ -1,9 +1,5 @@
 -- One row per (date, channel) of marketing spend (§3.5), money parsed from text to integer paise.
 -- If a day's file is delivered again (a correction), the latest delivery wins.
--- TODO(Phase 3 M2): implement stg_marketing_spend.
--- §3.5: spend per (date, channel) in integer paise with to_paise();
--- if a day's file arrives again, the latest delivery (dt) wins.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
 with raw as (
     select *
     from
@@ -18,8 +14,9 @@ with raw as (
 )
 
 select
-    cast(null as date) as spend_date,
-    cast(null as varchar) as channel,
-    cast(null as bigint) as spend_paise
+    cast(date as date) as spend_date,
+    lower(trim(channel)) as channel,
+    {{ to_paise('spend') }} as spend_paise
 from raw
-where false
+where cast(date as date) <= {{ run_date() }}
+qualify row_number() over (partition by cast(date as date), lower(trim(channel)) order by cast(dt as date) desc) = 1

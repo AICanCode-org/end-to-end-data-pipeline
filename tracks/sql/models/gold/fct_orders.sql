@@ -1,19 +1,27 @@
 -- §4.3 One row per (non-test) order in its latest state, with totals from its kept lines.
--- TODO(Phase 3 M3): implement fct_orders.
--- §4.3: one row per order with items_count, units, gross_paise (sum of its lines) and is_revenue.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
+with lines as (
+    select
+        order_id,
+        count(*) as items_count,
+        cast(sum(qty) as bigint) as units,
+        cast(sum(line_paise) as bigint) as gross_paise
+    from {{ ref('fct_order_items') }}
+    group by order_id
+)
+
 select
-    cast(null as varchar) as order_id,
-    cast(null as varchar) as customer_id,
-    cast(null as date) as order_date,
-    cast(null as timestamp) as created_at_utc,
-    cast(null as timestamp) as updated_at_utc,
-    cast(null as varchar) as status,
-    cast(null as varchar) as city,
-    cast(null as varchar) as region,
-    cast(null as varchar) as payment_method,
-    cast(null as bigint) as items_count,
-    cast(null as bigint) as units,
-    cast(null as bigint) as gross_paise,
-    cast(null as boolean) as is_revenue
-where false
+    orders.order_id,
+    orders.customer_id,
+    orders.order_date,
+    orders.created_at_utc,
+    orders.updated_at_utc,
+    orders.status,
+    orders.city,
+    orders.region,
+    orders.payment_method,
+    coalesce(lines.items_count, 0) as items_count,
+    coalesce(lines.units, 0) as units,
+    coalesce(lines.gross_paise, 0) as gross_paise,
+    orders.status in ('placed', 'shipped', 'delivered') as is_revenue
+from {{ ref('stg_orders') }} as orders
+left join lines on orders.order_id = lines.order_id

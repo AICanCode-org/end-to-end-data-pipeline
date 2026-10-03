@@ -1,10 +1,5 @@
 -- One row per order: its latest version (contract/transform-spec.md §3.1). An order whose status changes later
 -- is extracted again in a later window, so the bronze layer holds several versions of it.
--- TODO(Phase 3 M2): implement stg_orders.
--- transform-spec §3.1: keep the latest version of each order_id (latest updated_at, then latest dt),
--- drop test orders, parse timestamps with utc_timestamp(), order_date = ist_date(created_at_utc),
--- city/region from the city_map seed (unknown spellings -> 'Unknown'). Keep `items` as it is.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
 with raw as (
     select *
     from
@@ -25,18 +20,34 @@ with raw as (
             }
         )
     where cast(dt as date) <= {{ run_date() }}
+),
+
+parsed as (
+    select
+        *,
+        cast(dt as date) as extract_date,
+        {{ utc_timestamp('created_at') }} as created_at_utc,
+        {{ utc_timestamp('updated_at') }} as updated_at_utc
+    from raw
+),
+
+latest as (
+    select *
+    from parsed
+    qualify row_number() over (partition by order_id order by updated_at_utc desc, extract_date desc) = 1
 )
 
 select
-    cast(null as varchar) as order_id,
-    cast(null as varchar) as customer_id,
-    cast(null as varchar) as status,
-    cast(null as timestamp) as created_at_utc,
-    cast(null as timestamp) as updated_at_utc,
-    cast(null as date) as order_date,
-    cast(null as varchar) as city,
-    cast(null as varchar) as region,
-    cast(null as varchar) as payment_method,
-    cast(null as struct(sku varchar, qty bigint, unit_price_paise bigint)[]) as items
-from raw
-where false
+    latest.order_id,
+    latest.customer_id,
+    lower(trim(latest.status)) as status,
+    latest.created_at_utc,
+    latest.updated_at_utc,
+    {{ ist_date('latest.created_at_utc') }} as order_date,
+    coalesce(city_map.city, 'Unknown') as city,
+    coalesce(city_map.region, 'Unknown') as region,
+    lower(trim(latest.payment_method)) as payment_method,
+    latest.items
+from latest
+left join {{ ref('city_map') }} as city_map on lower(trim(latest.ship_city)) = city_map.raw_city
+where not latest.is_test

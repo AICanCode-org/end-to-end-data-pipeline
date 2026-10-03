@@ -1,13 +1,18 @@
 -- One row per order line of the latest order version (§3.2). Lines with a non-positive quantity are dropped;
 -- line_number is the 1-based position in the original items array, so it stays stable.
--- TODO(Phase 3 M2): implement stg_order_items.
--- §3.2: one row per element of stg_orders.items (unnest with its position);
--- line_number starts at 1, qty and unit_price_paise as BIGINT.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
+with lines as (
+    select
+        order_id,
+        unnest(generate_series(1, len(items))) as line_number,
+        unnest(items) as item
+    from {{ ref('stg_orders') }}
+)
+
 select
-    cast(null as varchar) as order_id,
-    cast(null as integer) as line_number,
-    cast(null as varchar) as sku,
-    cast(null as bigint) as qty,
-    cast(null as bigint) as unit_price_paise
-where false
+    order_id,
+    cast(line_number as integer) as line_number,
+    item.sku,
+    item.qty,
+    item.unit_price_paise
+from lines
+where item.qty > 0

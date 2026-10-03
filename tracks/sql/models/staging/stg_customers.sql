@@ -1,8 +1,4 @@
 -- One row per customer: the latest profile version (§3.3). PII (email, phone) never reached the lake.
--- TODO(Phase 3 M2): implement stg_customers.
--- §3.3: the latest profile per customer_id, test customers removed, signup_date in IST,
--- city/region from the city map, acquisition_channel lower-cased and trimmed.
--- Until then this stub returns no rows, with exactly the columns and types the next models expect.
 with raw as (
     select *
     from
@@ -20,13 +16,24 @@ with raw as (
             }
         )
     where cast(dt as date) <= {{ run_date() }}
+),
+
+latest as (
+    select
+        *,
+        {{ utc_timestamp('signup_at') }} as signup_at_utc
+    from raw
+    qualify row_number() over (
+        partition by customer_id order by {{ utc_timestamp('updated_at') }} desc, cast(dt as date) desc
+    ) = 1
 )
 
 select
-    cast(null as varchar) as customer_id,
-    cast(null as date) as signup_date,
-    cast(null as varchar) as city,
-    cast(null as varchar) as region,
-    cast(null as varchar) as acquisition_channel
-from raw
-where false
+    latest.customer_id,
+    {{ ist_date('latest.signup_at_utc') }} as signup_date,
+    coalesce(city_map.city, 'Unknown') as city,
+    coalesce(city_map.region, 'Unknown') as region,
+    lower(trim(latest.acquisition_channel)) as acquisition_channel
+from latest
+left join {{ ref('city_map') }} as city_map on lower(trim(latest.city)) = city_map.raw_city
+where not latest.is_test

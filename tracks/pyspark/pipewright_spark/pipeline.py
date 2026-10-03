@@ -63,10 +63,15 @@ def load_contract(path: Path) -> dict:
 
 def enforce(name: str, df: DataFrame, contract: dict) -> DataFrame:
     """The Spark equivalent of an enforced dbt contract: exact column names, order and types, or fail."""
-    # TODO(Phase 3 M3): implement enforce.
-    # The Spark version of an enforced dbt contract: the exact column names, order and Spark types of
-    # contract['gold'][name]['columns'] (SPARK_TYPES), else raise ContractError naming what differs.
-    raise NotImplementedError("Phase 3 M3: enforce (see the TODO above)")
+    want = contract["gold"][name]["columns"]
+    got = [(f.name, f.dataType.simpleString()) for f in df.schema.fields]
+    expected = [(col, SPARK_TYPES[typ]) for col, typ in want.items()]
+    if [c for c, _ in got] != [c for c, _ in expected]:
+        raise ContractError(f"{name}: columns {[c for c, _ in got]} != contract {[c for c, _ in expected]}")
+    wrong = [(c, g, e) for (c, g), (_, e) in zip(got, expected, strict=True) if g != e]
+    if wrong:
+        raise ContractError(f"{name}: wrong types (column, got, contract): {wrong}")
+    return df
 
 
 def write_parquet(tables: dict[str, DataFrame], out: Path, contract: dict) -> dict[str, Path]:

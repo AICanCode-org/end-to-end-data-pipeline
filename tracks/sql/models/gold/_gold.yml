@@ -7,116 +7,132 @@ models:
     description: One row per (non-test) customer, latest profile, with their first valid order.
     config: {contract: {enforced: true}}
     columns:
-      - {name: customer_id, data_type: varchar, description: "C-nnnnnn"}
-      - {name: signup_date, data_type: date, description: IST date of sign-up}
-      - {name: city, data_type: varchar, description: canonical city or Unknown}
+      - {name: customer_id, data_type: varchar, description: "C-nnnnnn", data_tests: [unique, not_null]}
+      - {name: signup_date, data_type: date, description: IST date of sign-up, data_tests: [not_null]}
+      - {name: city, data_type: varchar, description: canonical city or Unknown, data_tests: [not_null]}
       - name: region
         data_type: varchar
         description: North, South, East, West or Unknown
+        data_tests: [{accepted_values: {arguments: {values: [North, South, East, West, Unknown]}}}]
       - name: acquisition_channel
         data_type: varchar
         description: marketing channel the customer came from
+        data_tests:
+          - accepted_values: {arguments: {values: [google_ads, meta_ads, affiliates, referral, organic]}}
       - {name: first_order_date, data_type: date, description: IST date of the first not-cancelled order (NULL if none)}
-      - {name: valid_orders, data_type: bigint, description: number of not-cancelled orders}
+      - {name: valid_orders, data_type: bigint, description: number of not-cancelled orders, data_tests: [non_negative]}
 
   - name: dim_products
     description: One row per SKU in the latest catalogue snapshot on or before run_date.
     config: {contract: {enforced: true}}
     columns:
-      - {name: sku, data_type: varchar}
-      - {name: product_name, data_type: varchar}
+      - {name: sku, data_type: varchar, data_tests: [unique, not_null]}
+      - {name: product_name, data_type: varchar, data_tests: [not_null]}
       - name: category
         data_type: varchar
-      - {name: price_paise, data_type: bigint}
-      - {name: first_seen_date, data_type: date}
+        data_tests: [{accepted_values: {arguments: {values: [kitchen, cookware, storage, cleaning, decor, appliances]}}}]
+      - {name: price_paise, data_type: bigint, data_tests: [not_null, non_negative]}
+      - {name: first_seen_date, data_type: date, data_tests: [not_null]}
 
   - name: fct_orders
     description: One row per (non-test) order in its latest state, totals from its kept lines.
     config: {contract: {enforced: true}}
     columns:
-      - {name: order_id, data_type: varchar}
+      - {name: order_id, data_type: varchar, data_tests: [unique, not_null]}
       - name: customer_id
         data_type: varchar
-      - {name: order_date, data_type: date, description: IST date the order was placed}
-      - {name: created_at_utc, data_type: timestamp}
-      - {name: updated_at_utc, data_type: timestamp}
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('dim_customers')", field: customer_id}}}]
+      - {name: order_date, data_type: date, description: IST date the order was placed, data_tests: [not_null]}
+      - {name: created_at_utc, data_type: timestamp, data_tests: [not_null]}
+      - {name: updated_at_utc, data_type: timestamp, data_tests: [not_null]}
       - name: status
         data_type: varchar
+        data_tests: [{accepted_values: {arguments: {values: [placed, shipped, delivered, cancelled, returned]}}}]
       - {name: city, data_type: varchar}
-      - {name: region, data_type: varchar}
-      - {name: payment_method, data_type: varchar}
-      - {name: items_count, data_type: bigint}
-      - {name: units, data_type: bigint}
-      - {name: gross_paise, data_type: bigint}
+      - {name: region, data_type: varchar, data_tests: [not_null]}
+      - {name: payment_method, data_type: varchar, data_tests: [{accepted_values: {arguments: {values: [prepaid, cod]}}}]}
+      - {name: items_count, data_type: bigint, data_tests: [non_negative]}
+      - {name: units, data_type: bigint, data_tests: [non_negative]}
+      - {name: gross_paise, data_type: bigint, data_tests: [not_null, non_negative]}
       - {name: is_revenue, data_type: boolean, description: "status is placed, shipped or delivered"}
 
   - name: fct_order_items
     description: One row per kept order line (quantity > 0) of the latest order version.
     config: {contract: {enforced: true}}
+    data_tests:
+      - unique_combination: {arguments: {columns: [order_id, line_number]}}
     columns:
-      - {name: order_id, data_type: varchar}
-      - {name: line_number, data_type: integer}
+      - {name: order_id, data_type: varchar, data_tests: [not_null]}
+      - {name: line_number, data_type: integer, data_tests: [not_null]}
       - {name: order_date, data_type: date}
       - name: sku
         data_type: varchar
-      - {name: category, data_type: varchar}
+        data_tests:
+          - relationships:
+              arguments: {to: "ref('dim_products')", field: sku}
+              config: {severity: warn}   # known: a discontinued SKU still shows up in orders
+      - {name: category, data_type: varchar, data_tests: [not_null]}
       - {name: region, data_type: varchar}
       - {name: status, data_type: varchar}
-      - {name: qty, data_type: bigint}
-      - {name: unit_price_paise, data_type: bigint}
-      - {name: line_paise, data_type: bigint}
+      - {name: qty, data_type: bigint, data_tests: [positive]}
+      - {name: unit_price_paise, data_type: bigint, data_tests: [non_negative]}
+      - {name: line_paise, data_type: bigint, data_tests: [non_negative]}
 
   - name: mart_revenue_daily
     description: "Report 1: revenue by IST day, region and product category (revenue statuses only)."
     config: {contract: {enforced: true}}
+    data_tests:
+      - unique_combination: {arguments: {columns: [order_date, region, category]}}
     columns:
-      - {name: order_date, data_type: date}
-      - {name: region, data_type: varchar}
-      - {name: category, data_type: varchar}
-      - {name: orders, data_type: bigint}
-      - {name: units, data_type: bigint}
-      - {name: revenue_paise, data_type: bigint}
+      - {name: order_date, data_type: date, data_tests: [not_null]}
+      - {name: region, data_type: varchar, data_tests: [not_null]}
+      - {name: category, data_type: varchar, data_tests: [not_null]}
+      - {name: orders, data_type: bigint, data_tests: [positive]}
+      - {name: units, data_type: bigint, data_tests: [positive]}
+      - {name: revenue_paise, data_type: bigint, data_tests: [non_negative]}
 
   - name: mart_cac_monthly
     description: "Report 2: CAC = spend / new customers (first valid order in the month), integer paise rounded down."
     config: {contract: {enforced: true}}
+    data_tests:
+      - unique_combination: {arguments: {columns: [month, channel]}}
     columns:
-      - {name: month, data_type: date}
-      - {name: channel, data_type: varchar}
-      - {name: spend_paise, data_type: bigint}
-      - {name: new_customers, data_type: bigint}
-      - {name: cac_paise, data_type: bigint, description: NULL when nobody was acquired}
+      - {name: month, data_type: date, data_tests: [not_null]}
+      - {name: channel, data_type: varchar, data_tests: [not_null]}
+      - {name: spend_paise, data_type: bigint, data_tests: [non_negative]}
+      - {name: new_customers, data_type: bigint, data_tests: [non_negative]}
+      - {name: cac_paise, data_type: bigint, description: NULL when nobody was acquired, data_tests: [non_negative]}
 
   - name: mart_mrr_monthly
     description: "Report 3: Prime MRR at each month end (or run_date), with new and churned MRR."
     config: {contract: {enforced: true}}
     columns:
-      - {name: month, data_type: date}
-      - {name: active_subscriptions, data_type: bigint}
+      - {name: month, data_type: date, data_tests: [unique, not_null]}
+      - {name: active_subscriptions, data_type: bigint, data_tests: [non_negative]}
       - {name: monthly_subscriptions, data_type: bigint}
       - {name: annual_subscriptions, data_type: bigint}
-      - {name: mrr_paise, data_type: bigint}
-      - {name: new_mrr_paise, data_type: bigint}
-      - {name: churned_mrr_paise, data_type: bigint}
+      - {name: mrr_paise, data_type: bigint, data_tests: [non_negative]}
+      - {name: new_mrr_paise, data_type: bigint, data_tests: [non_negative]}
+      - {name: churned_mrr_paise, data_type: bigint, data_tests: [non_negative]}
 
   - name: mart_top_products_30d
     description: "Report 4: top 10 products by revenue in the 30 days ending on run_date."
     config: {contract: {enforced: true}}
     columns:
-      - {name: as_of_date, data_type: date}
-      - {name: rank, data_type: integer}
-      - {name: sku, data_type: varchar}
+      - {name: as_of_date, data_type: date, data_tests: [not_null]}
+      - {name: rank, data_type: integer, data_tests: [unique, not_null, {accepted_range: {arguments: {min_value: 1, max_value: 10}}}]}
+      - {name: sku, data_type: varchar, data_tests: [unique]}
       - {name: product_name, data_type: varchar}
       - {name: category, data_type: varchar}
       - {name: units, data_type: bigint}
-      - {name: revenue_paise, data_type: bigint}
+      - {name: revenue_paise, data_type: bigint, data_tests: [non_negative]}
 
   - name: mart_cohort_retention
     description: "Report 5: share of mature customers who ordered again within 30 days of their first order."
     config: {contract: {enforced: true}}
     columns:
-      - {name: cohort_month, data_type: date}
-      - {name: customers, data_type: bigint}
-      - {name: mature_customers, data_type: bigint}
-      - {name: retained_30d, data_type: bigint}
-      - {name: retention_rate, data_type: double}
+      - {name: cohort_month, data_type: date, data_tests: [unique, not_null]}
+      - {name: customers, data_type: bigint, data_tests: [positive]}
+      - {name: mature_customers, data_type: bigint, data_tests: [non_negative]}
+      - {name: retained_30d, data_type: bigint, data_tests: [non_negative]}
+      - {name: retention_rate, data_type: double, data_tests: [{accepted_range: {arguments: {min_value: 0, max_value: 1}}}]}

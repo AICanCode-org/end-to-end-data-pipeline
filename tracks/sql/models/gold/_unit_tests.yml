@@ -1,0 +1,58 @@
+version: 2
+
+# dbt unit tests: tiny hand-written inputs -> exact expected rows, for the trickiest business rules.
+unit_tests:
+  - name: cac_rounds_down_and_is_null_without_customers
+    description: CAC is integer paise rounded down; a channel that acquired nobody has spend but no CAC.
+    model: mart_cac_monthly
+    given:
+      - input: ref('stg_marketing_spend')
+        rows:
+          - {spend_date: 2026-06-01, channel: google_ads, spend_paise: 1000}
+          - {spend_date: 2026-06-02, channel: google_ads, spend_paise: 1001}
+          - {spend_date: 2026-06-01, channel: meta_ads, spend_paise: 500}
+      - input: ref('dim_customers')
+        rows:
+          - {customer_id: C-1, acquisition_channel: google_ads, first_order_date: 2026-06-03}
+          - {customer_id: C-2, acquisition_channel: google_ads, first_order_date: 2026-06-20}
+          - {customer_id: C-3, acquisition_channel: google_ads, first_order_date: 2026-06-21}
+          - {customer_id: C-4, acquisition_channel: organic, first_order_date: 2026-06-05}
+          - {customer_id: C-5, acquisition_channel: organic, first_order_date: null}
+    expect:
+      rows:
+        - {month: 2026-06-01, channel: google_ads, spend_paise: 2001, new_customers: 3, cac_paise: 667}
+        - {month: 2026-06-01, channel: meta_ads, spend_paise: 500, new_customers: 0, cac_paise: null}
+        - {month: 2026-06-01, channel: organic, spend_paise: 0, new_customers: 1, cac_paise: 0}
+
+  - name: retention_counts_only_mature_customers
+    description: A second valid order within 30 days retains; cancelled orders do not count; immature customers are excluded.
+    model: mart_cohort_retention
+    overrides:
+      vars: {run_date: "2026-07-10"}
+    given:
+      - input: ref('fct_orders')
+        rows:
+          - {order_id: O-1, customer_id: C-1, order_date: 2026-06-01, created_at_utc: "2026-06-01 04:00:00", status: delivered}
+          - {order_id: O-2, customer_id: C-1, order_date: 2026-07-01, created_at_utc: "2026-07-01 04:00:00", status: delivered}
+          - {order_id: O-3, customer_id: C-2, order_date: 2026-06-02, created_at_utc: "2026-06-02 04:00:00", status: delivered}
+          - {order_id: O-4, customer_id: C-2, order_date: 2026-06-05, created_at_utc: "2026-06-05 04:00:00", status: cancelled}
+          - {order_id: O-5, customer_id: C-3, order_date: 2026-06-30, created_at_utc: "2026-06-30 04:00:00", status: placed}
+    expect:
+      rows:
+        - {cohort_month: 2026-06-01, customers: 3, mature_customers: 2, retained_30d: 1, retention_rate: 0.5}
+
+  - name: latest_mrr_counts_annual_as_one_twelfth
+    description: An annual plan adds amount // 12; a subscription whose period ended is churned MRR.
+    model: mart_mrr_monthly
+    overrides:
+      vars: {run_date: "2026-07-31"}
+    given:
+      - input: ref('stg_payments')
+        rows:
+          - {event_type: subscription.charged, subscription_id: S-1, plan: prime_monthly, amount_paise: 14900, period_start: 2026-06-10, period_end: 2026-07-10}
+          - {event_type: subscription.charged, subscription_id: S-2, plan: prime_annual, amount_paise: 142800, period_start: 2026-06-15, period_end: 2027-06-15}
+          - {event_type: payment.captured, subscription_id: null, plan: null, amount_paise: 99900, period_start: null, period_end: null}
+    expect:
+      rows:
+        - {month: 2026-06-01, active_subscriptions: 2, monthly_subscriptions: 1, annual_subscriptions: 1, mrr_paise: 26800, new_mrr_paise: 26800, churned_mrr_paise: 0}
+        - {month: 2026-07-01, active_subscriptions: 1, monthly_subscriptions: 0, annual_subscriptions: 1, mrr_paise: 11900, new_mrr_paise: 0, churned_mrr_paise: 14900}

@@ -99,3 +99,16 @@ Schemas, your own code, error messages and aggregates are fine.
   partition; `caplog` never contains the token.
 * **Time saved / lost (honest guess):** saved ~1 hour.
 * **What I learned:** a review prompt with concrete questions finds real bugs; turn each into a test.
+
+### 2026-08-18 · Phase 4 · A data test that was wrong, not strict
+* **Tool / model:** ChatGPT (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 1 of Phase 4 with `fct_order_items` and `dim_products`.
+* **What it produced:** 14 tests, including `relationships` from `fct_order_items.sku` to `dim_products.sku` with
+  severity error, and `accepted_values` on `category` without `unknown`.
+* **What I kept / changed / rejected, and why:** kept 12. Made the SKU relationship a **warning** (the spec allows
+  order lines for SKUs missing from the catalogue, shown as `unknown`) and added `unknown` to the accepted categories
+  of the fact table (not of the dimension).
+* **How I verified it:** ran every test on the fixture and the full build: both "strict" tests failed on correct data.
+* **Time saved / lost (honest guess):** saved ~40 minutes.
+* **What I learned:** a test that fails on correct data is a wrong test; severity is a business decision.

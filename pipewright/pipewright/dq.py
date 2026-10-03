@@ -50,13 +50,44 @@ def _resolve(text: str, enums: dict[str, list[str]]) -> str:
 
 
 def run_check(con: duckdb.DuckDBPyConnection, check: dict, enums: dict[str, list[str]]) -> CheckResult:
-    # TODO(Phase 4): implement run_check.
-    # One branch per check kind of contract/data-contract.yaml: row_count_min/max, accepted_values (report up to
-    # 5 unexpected values, masked unless SAFE_VALUE matches), relationship, max_share, expression, reconcile.
-    # A check that cannot run (SQL error, unknown kind) is status 'error', never a pass.
-    # Until Phase 4 this stub lets every check pass, so the Phase 3 pipeline can publish.
-    return CheckResult(check["id"], check["kind"], check.get("table", "-"), check.get("severity", "error"), "pass", None, None,
-                       "not implemented yet (Phase 4)")
+    kind, table, sev = check["kind"], check.get("table", "-"), check.get("severity", "error")
+    limit = check.get("max_failing", 0)
+
+    def result(failing: bool, observed, threshold, detail: str, values: list[str] | None = None) -> CheckResult:
+        return CheckResult(check["id"], kind, table, sev, "fail" if failing else "pass", observed, threshold, detail, values or [])
+
+    try:
+        if kind in ("row_count_min", "row_count_max"):
+            n = con.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            bound = check["min"] if kind == "row_count_min" else check["max"]
+            bad = n < bound if kind == "row_count_min" else n > bound
+            return result(bad, n, bound, f"{table} has {n} rows ({'min' if kind == 'row_count_min' else 'max'} {bound})")
+        if kind == "accepted_values":
+            col, allowed = check["column"], _resolve(check["values"], enums) if isinstance(check["values"], str) else _enum_sql(check["values"])
+            where = f"{col} IS NULL OR {col} NOT IN {allowed}"
+            n = con.execute(f"SELECT count(*) FROM {table} WHERE {where}").fetchone()[0]
+            vals = [str(v[0]) for v in con.execute(f"SELECT DISTINCT {col} FROM {table} WHERE {where} ORDER BY 1 NULLS FIRST LIMIT 5").fetchall()]
+            vals = [v if SAFE_VALUE.match(v) else "<unprintable>" for v in vals]
+            return result(n > limit, n, limit, f"{n} row(s) of {table}.{col} outside the accepted values", vals)
+        if kind == "relationship":
+            col, (to_table, to_col) = check["column"], check["to"].split(".")
+            n = con.execute(f"SELECT count(*) FROM {table} WHERE {col} IS NOT NULL AND {col} NOT IN (SELECT {to_col} FROM {to_table})").fetchone()[0]
+            return result(n > limit, n, limit, f"{n} row(s) of {table}.{col} have no match in {check['to']}")
+        if kind == "max_share":
+            total, hits = con.execute(f"SELECT count(*), count(*) FILTER (WHERE {check['where']}) FROM {table}").fetchone()
+            share = round(hits / total, 6) if total else 0.0
+            return result(share > check["max"], share, check["max"], f"{hits} of {total} rows of {table} match {check['where']}")
+        if kind == "expression":
+            n = con.execute(f"SELECT count(*) FROM {table} WHERE NOT ({check['expect']})").fetchone()[0]
+            return result(n > limit, n, limit, f"{n} row(s) of {table} break: {check['expect']}")
+        if kind == "reconcile":
+            left = con.execute(_resolve(check["left"], enums)).fetchone()[0] or 0
+            right = con.execute(_resolve(check["right"], enums)).fetchone()[0] or 0
+            diff = int(left) - int(right)
+            return result(diff != 0, diff, 0, f"left - right = {diff}")
+        raise ValueError(f"unknown check kind {kind!r}")
+    except (duckdb.Error, KeyError, ValueError) as exc:
+        return CheckResult(check["id"], kind, table, sev, "error", None, None, f"check could not run: {type(exc).__name__}")
 
 
 def dbt_test_results(settings: Settings, day: dt.date) -> list[CheckResult]:

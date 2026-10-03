@@ -5,26 +5,33 @@ models:
   - name: stg_orders
     description: Latest version of every non-test order; timestamps in UTC, order_date in IST, city mapped.
     columns:
-      - {name: order_id}
-      - {name: customer_id}
-      - {name: created_at_utc}
-      - {name: updated_at_utc}
+      - {name: order_id, data_tests: [unique, not_null]}
+      - {name: customer_id, data_tests: [not_null]}
+      - {name: created_at_utc, data_tests: [not_null]}
+      - {name: updated_at_utc, data_tests: [not_null]}
   - name: stg_order_items
     description: Kept lines (qty > 0) of the latest order versions, with their 1-based position.
+    data_tests:
+      - unique_combination: {arguments: {columns: [order_id, line_number]}}
   - name: stg_customers
     description: Latest profile of every non-test customer. No PII.
     columns:
-      - {name: customer_id}
+      - {name: customer_id, data_tests: [unique, not_null]}
   - name: stg_payments
     description: Payment events, one row per event_id (re-deliveries removed).
     columns:
-      - {name: event_id}
+      - {name: event_id, data_tests: [unique, not_null]}
       - name: event_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: [payment.captured, refund.succeeded, subscription.charged, subscription.cancelled]}
   - name: stg_marketing_spend
     description: Spend per day and channel in integer paise (latest delivery of each day's file).
+    data_tests:
+      - unique_combination: {arguments: {columns: [spend_date, channel]}}
     columns:
-      - {name: spend_paise}
+      - {name: spend_paise, data_tests: [not_null, non_negative]}
   - name: stg_products
     description: Latest catalogue snapshot; categories normalised (trimmed, lower case, no accents).
     columns:
-      - {name: sku}
+      - {name: sku, data_tests: [unique, not_null]}

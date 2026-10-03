@@ -16,8 +16,6 @@ os.environ.setdefault("AIRFLOW__CORE__LOAD_EXAMPLES", "False")
 os.environ.setdefault("AIRFLOW__CORE__UNIT_TEST_MODE", "True")
 
 PENDING: set[str] = {
-    "Phase 4 - data-quality checks",
-    "Phase 4 - data tests",
     "Phase 6 - AI incident explainer",
     "Phase 6 - dashboard",
 }

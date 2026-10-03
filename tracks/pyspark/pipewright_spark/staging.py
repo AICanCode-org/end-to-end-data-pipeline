@@ -42,6 +42,8 @@ def stg_orders(raw: DataFrame, cities: DataFrame) -> DataFrame:
         "region",
         F.lower(F.trim("payment_method")).alias("payment_method"),
         "items",
+        "coupon_code",  # 1.1 optional
+        F.coalesce("discount_paise", F.lit(0)).cast("bigint").alias("discount_paise"),
     )
 
 

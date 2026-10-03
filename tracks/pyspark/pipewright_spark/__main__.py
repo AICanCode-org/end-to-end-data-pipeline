@@ -20,13 +20,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--duckdb", type=Path, default=Path(os.environ.get("PIPEWRIGHT_DUCKDB", root / "warehouse/pipewright_build.duckdb")))
     ap.add_argument("--parquet", type=Path, default=None, help="where gold Parquet goes (default <lake>/gold)")
     ap.add_argument("--contract", type=Path, default=root / "contract" / "data-contract.yaml")
+    ap.add_argument("--previous", type=Path, default=None, help="1.1: folder with the previous published facts (incremental)")
+    ap.add_argument("--since", default=None, help="1.1: rebuild the orders updated on or after this date (with --previous)")
     args = ap.parse_args(argv)
     t0 = time.time()
     contract = pipeline.load_contract(args.contract)
     spark = get_spark()
     spark.sparkContext.setLogLevel("ERROR")
     try:
-        tables = pipeline.build(spark, args.lake.resolve(), args.contract.parent / "seeds", args.run_date)
+        if args.previous and not args.since:
+            ap.error("--previous needs --since")
+        previous = pipeline.read_previous(spark, args.previous, contract) if args.previous else None
+        tables = pipeline.build(spark, args.lake.resolve(), args.contract.parent / "seeds", args.run_date, previous, args.since)
         paths = pipeline.write_parquet(tables, (args.parquet or args.lake / "gold").resolve(), contract)
     except pipeline.ContractError as exc:
         print(f"CONTRACT VIOLATION: {exc}", file=sys.stderr)
@@ -34,7 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         spark.stop()
     warehouse.register(args.duckdb, paths, contract)
-    print(f"pyspark: built {len(paths)} gold tables for {args.run_date} in {time.time() - t0:.1f}s -> {args.duckdb}")
+    mode = f"incremental since {args.since}" if args.previous else "full"
+    print(f"pyspark: built {len(paths)} gold tables ({mode}) for {args.run_date} in {time.time() - t0:.1f}s -> {args.duckdb}")
     return 0
 
 

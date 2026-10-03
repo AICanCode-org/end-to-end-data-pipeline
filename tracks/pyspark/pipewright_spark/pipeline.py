@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import yaml
 from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import functions as F
 
 from . import bronze, gold, staging
+from .parsing import ist_date
 
 SPARK_TYPES = {  # contract (DuckDB) type -> Spark simpleString
     "VARCHAR": "string", "DATE": "date", "BIGINT": "bigint", "INTEGER": "int", "TIMESTAMP": "timestamp_ntz",
@@ -33,11 +36,33 @@ def build_silver(spark: SparkSession, lake: Path, seeds: Path, run_date: str) ->
     }
 
 
-def build_gold(silver: dict[str, DataFrame], run_date: str) -> dict[str, DataFrame]:
-    """The nine gold DataFrames (two dimensions, two facts, five reports) from the silver ones."""
+def facts(silver: dict[str, DataFrame], previous: dict[str, DataFrame] | None = None, since: str | None = None) -> tuple[DataFrame, DataFrame]:
+    """fct_order_items and fct_orders: a full build, or (1.1) an incremental merge into the previous published facts.
+
+    Incremental, like the dbt models (delete+insert by order_id): recompute the orders updated on or after `since`
+    and the lines that were 'unknown' last time, then replace those orders' rows in the previous tables."""
     orders, products = silver["stg_orders"], silver["stg_products"]
-    order_items = gold.fct_order_items(silver["stg_order_items"], orders, products).cache()
-    fct_orders = gold.fct_orders(orders.drop("items"), order_items).cache()
+    all_items = gold.fct_order_items(silver["stg_order_items"], orders, products)
+    if previous is None:
+        order_items = all_items
+        return order_items, gold.fct_orders(orders.drop("items"), order_items)
+    prev_items, prev_orders = previous["fct_order_items"], previous["fct_orders"]
+    changed = orders.where(ist_date(F.col("updated_at_utc")) >= F.lit(since).cast("date")).select("order_id")
+    unknown = prev_items.where(F.col("category") == "unknown").select("order_id")
+    new_items = all_items.join(changed.unionByName(unknown).distinct(), "order_id", "left_semi")
+    order_items = prev_items.join(new_items.select("order_id").distinct(), "order_id", "left_anti").unionByName(new_items)
+    new_orders = gold.fct_orders(orders.drop("items").join(changed, "order_id", "left_semi"), order_items)
+    fct_orders = prev_orders.join(new_orders.select("order_id"), "order_id", "left_anti").unionByName(new_orders)
+    return order_items, fct_orders
+
+
+def build_gold(
+    silver: dict[str, DataFrame], run_date: str, previous: dict[str, DataFrame] | None = None, since: str | None = None
+) -> dict[str, DataFrame]:
+    """The nine gold DataFrames (two dimensions, two facts, five reports) from the silver ones."""
+    products = silver["stg_products"]
+    order_items, fct_orders = facts(silver, previous, since)
+    order_items, fct_orders = order_items.cache(), fct_orders.cache()
     dim_customers = gold.dim_customers(silver["stg_customers"], fct_orders).cache()
     return {
         "dim_customers": dim_customers,
@@ -52,8 +77,19 @@ def build_gold(silver: dict[str, DataFrame], run_date: str) -> dict[str, DataFra
     }
 
 
-def build(spark: SparkSession, lake: Path, seeds: Path, run_date: str) -> dict[str, DataFrame]:
-    return build_gold(build_silver(spark, lake, seeds, run_date), run_date)
+def build(
+    spark: SparkSession, lake: Path, seeds: Path, run_date: str, previous: dict[str, DataFrame] | None = None, since: str | None = None
+) -> dict[str, DataFrame]:
+    return build_gold(build_silver(spark, lake, seeds, run_date), run_date, previous, since)
+
+
+def read_previous(spark: SparkSession, folder: Path, contract: dict) -> dict[str, DataFrame]:
+    """The previous published facts (exported to Parquet by `pipewright transform`), typed as the contract says."""
+    out = {}
+    for name in ("fct_orders", "fct_order_items"):
+        df = spark.read.parquet(str(folder / f"{name}.parquet"))
+        out[name] = df.select(*[F.col(c).cast(SPARK_TYPES[t]).alias(c) for c, t in contract["gold"][name]["columns"].items()])
+    return out
 
 
 def load_contract(path: Path) -> dict:
@@ -75,9 +111,17 @@ def enforce(name: str, df: DataFrame, contract: dict) -> DataFrame:
 
 
 def write_parquet(tables: dict[str, DataFrame], out: Path, contract: dict) -> dict[str, Path]:
-    paths = {}
+    """Write every table to <name>.next first, then swap the folders: no table is overwritten while another
+    one may still read it lazily, and a failed build leaves the previous Parquet intact."""
+    staged = {}
     for name, df in tables.items():
-        target = out / name
+        target = out / f"{name}.next"
         enforce(name, df, contract).coalesce(1).write.mode("overwrite").parquet(str(target))
-        paths[name] = target
+        staged[name] = target
+    paths = {}
+    for name, target in staged.items():
+        final = out / name
+        shutil.rmtree(final, ignore_errors=True)
+        target.rename(final)
+        paths[name] = final
     return paths

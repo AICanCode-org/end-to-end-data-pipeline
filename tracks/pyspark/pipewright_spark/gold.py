@@ -6,6 +6,7 @@ from pyspark.sql import DataFrame, Window
 from pyspark.sql import functions as F
 
 REVENUE_STATUS = ["placed", "shipped", "delivered"]
+NOT_VALID = ["cancelled", "rto"]  # orders that never reached the customer (1.1 adds rto: return to origin)
 
 
 def dim_products(products: DataFrame) -> DataFrame:
@@ -54,13 +55,15 @@ def fct_orders(orders: DataFrame, order_items: DataFrame) -> DataFrame:
         F.coalesce("units", F.lit(0)).cast("bigint").alias("units"),
         F.coalesce("gross_paise", F.lit(0)).cast("bigint").alias("gross_paise"),
         F.col("status").isin(REVENUE_STATUS).alias("is_revenue"),
+        "discount_paise",  # 1.1
+        (F.coalesce("gross_paise", F.lit(0)) - F.col("discount_paise")).cast("bigint").alias("net_paise"),
     )
 
 
 def dim_customers(customers: DataFrame, orders: DataFrame) -> DataFrame:
     """§4.4"""
     valid = (
-        orders.where(F.col("status") != "cancelled")
+        orders.where(~F.col("status").isin(NOT_VALID))
         .groupBy("customer_id")
         .agg(F.min("order_date").alias("first_order_date"), F.count(F.lit(1)).alias("valid_orders"))
     )
@@ -177,7 +180,7 @@ def mart_cohort_retention(orders: DataFrame, run_date: str) -> DataFrame:
     """§5.5 Report 5: 30-day repeat rate by monthly cohort, mature customers only."""
     rd = F.lit(run_date).cast("date")
     w = Window.partitionBy("customer_id").orderBy("created_at_utc", "order_id")
-    valid = orders.where(F.col("status") != "cancelled").withColumn("n", F.row_number().over(w))
+    valid = orders.where(~F.col("status").isin(NOT_VALID)).withColumn("n", F.row_number().over(w))
     firsts = valid.where("n = 1").select(
         "customer_id", F.col("order_date").alias("first_date"), (F.date_add("order_date", 30) <= rd).alias("is_mature")
     )

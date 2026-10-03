@@ -178,3 +178,15 @@ Schemas, your own code, error messages and aggregates are fine.
 * **How I verified it:** every timestamp against `ops.run_log` and `warehouse/reports/alerts.jsonl` from the replay.
 * **Time saved / lost (honest guess):** saved ~30 minutes.
 * **What I learned:** AI drafts fill gaps with plausible events; a post-mortem may only contain what happened.
+
+### 2026-10-01 · Phase 8 · Mock interview
+* **Tool / model:** ChatGPT (free tier)
+* **Prompt (summary or paste):**
+  > Prompt 1 of Phase 8 with my README case study.
+* **What it produced:** 8 questions; the hardest were "what breaks at 100x the data?" and "why not just use Airbyte?".
+* **What I kept / changed / rejected, and why:** added a "what changes at 100x" paragraph to the retrospective
+  (partitioned Parquet in object storage, a table format, Spark on a cluster or a cloud warehouse, the same contract and
+  checks) and linked ADR-0002 in the case study.
+* **How I verified it:** answered aloud first, then checked each claim against the ADRs and the code.
+* **Time saved / lost (honest guess):** n/a (practice).
+* **What I learned:** every design decision should have a one-sentence "why" and a "when I would change it".

@@ -3,6 +3,73 @@
 [![CI](https://github.com/AICanCode-org/end-to-end-data-pipeline/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AICanCode-org/end-to-end-data-pipeline/actions/workflows/ci.yml)
 [![CI (solution)](https://github.com/AICanCode-org/end-to-end-data-pipeline/actions/workflows/ci.yml/badge.svg?branch=solution)](https://github.com/AICanCode-org/end-to-end-data-pipeline/actions/workflows/ci.yml?query=branch%3Asolution)
 
+## Case study (reference solution)
+
+> **Every morning BazaarBox's CEO pieced together five numbers from four tools and a spreadsheet, and they never
+> agreed. Pipewright ingests the orders API and three daily file drops into a partitioned lake, checks them against a
+> versioned data contract, builds the five reports twice (SQL with dbt, and PySpark) to one written spec, and only
+> publishes a build that passed its data-quality gate: correct by 06:30 IST, or clearly labelled as yesterday's.**
+
+```console
+$ scripts/parity-run.sh 1.1 | tail -5
+   MATCH mart_mrr_monthly (4 rows)
+   MATCH mart_top_products_30d (10 rows)
+   MATCH mart_cohort_retention (4 rows)
+   PARITY OK
+PARITY RUN OK
+```
+
+```mermaid
+flowchart LR
+  API[orders and customers API] --> ING[pipewright ingest]
+  DROPS[payments, ads, catalogue drops] --> ING
+  ING --> LAKE[(lake: raw partitions, manifests, quarantine)]
+  LAKE --> SQL[SQL · dbt on DuckDB]
+  LAKE --> SPARK[Python · PySpark]
+  SQL --> BUILD[(build warehouse)]
+  SPARK --> BUILD
+  BUILD --> DQ{data-quality gate}
+  DQ -- pass --> PUB[(published warehouse)]
+  DQ -- fail --> NOTE[incident note + alert]
+  PUB --> DASH[Streamlit dashboard]
+  AF[Airflow 06:00 IST] -.-> ING
+  MON[monitor 05:45 / 06:45] -.-> NOTE
+```
+
+**Problem → answer.** The sources are deliberately imperfect: timestamps in `Z` and `+05:30`, orders that change
+status days later, test orders, ` delhi `/`Bangalore`/`BENGALURU`, PII, payment events delivered twice, a late
+catalogue. Four months of data (June-September 2026, 18,314 orders, 6,647 customers) go through in about 25 s on the
+SQL track and 40 s on PySpark on a laptop, and both tracks produce identical gold tables (9 tables, row by row):
+
+| September 2026 | Number | What the CEO does with it |
+|---|---|---|
+| Revenue (placed, shipped, delivered; IST days) | ₹1,71,29,845 | weekly push by region and category |
+| Prime MRR at 30 Sep | ₹60,763 from 437 members | Finance's forecast |
+| CAC, influencer vs Google Ads | ₹815 vs ₹534 | the new channel costs 1.5× per first order |
+| 30-day repeat rate, August cohort | 75.5 % | growth is healthy, not bought |
+
+**Quality is enforced, not hoped for.** 107 checks on the SQL track (15 contract checks + 92 dbt data tests, enforced
+model contracts), 15 contract checks on PySpark; a blocking failure stops the publish and writes an incident note.
+Unit tests: 83 for the shared package (96 % coverage), 23 SQL, 38 PySpark (99.6 %), 16 dashboard, 6 DAG; CI runs
+them, both tracks on the full data, and the whole stack in Docker (5 non-root images).
+
+**After launch.** On 2 September the gate stopped a new `influencer` channel from reaching the reports, as designed,
+but nobody was told and the CEO noticed at 09:00. v1.1 versions the contract additively (1.1.0: `rto`, coupons, a new
+ads column), makes the facts incremental (proved equal to a full rebuild on every table), adds backfills and
+monitoring that alerts at 06:45 when the 06:30 SLA is missed, and proves backward compatibility in both directions.
+[Post-mortem](docs/postmortem-2026-09.md) · [retrospective](docs/retrospective.md).
+
+**Decisions I'd defend in an interview** ([design](spec/design.md)):
+[lake files and DuckDB instead of a cluster](spec/adr/0001-lake-files-and-duckdb.md) ·
+[our own ingestion package](spec/adr/0002-own-ingestion-package.md) ·
+[two tracks with a parity check](spec/adr/0003-two-tracks-with-parity.md) ·
+[build, check, then publish atomically](spec/adr/0004-publish-gate.md) ·
+[Airflow calls one CLI](spec/adr/0005-airflow-calls-one-cli.md) ·
+[versioned contract, incremental facts, monitoring](spec/adr/0006-versioned-contract-incremental-and-monitoring.md).
+
+**What I would do next:** a table format (Delta or Iceberg) with MERGE when history outgrows one DuckDB file; the
+webhook alerts into the team's on-call tool; a contract PR as part of every upstream launch checklist.
+
 Pipewright is a guided project from **[AiCanCode](https://www.aicancode.org)**, the capstone of the Data
 Engineering track. Over 9 phases (about 45 hours) you build **one production-style pipeline the whole way**:
 requirements, a data contract and a design with ADRs, test-first ingestion and transformations, data-quality

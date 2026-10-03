@@ -1,0 +1,150 @@
+# Pipewright local stack (about 3 GB RAM with the pipeline profile, about 5 GB with Airflow too).
+#   docker compose up -d --build                    source API (:18140) + dashboard (:18142)
+#   docker compose --profile pipeline run --rm pipeline-sql run --start 2026-06-01 --end 2026-08-31
+#   docker compose --profile pipeline run --rm pipeline-pyspark run --start 2026-06-01 --end 2026-08-31
+#   docker compose --profile pipeline run --rm parity      both tracks' gold tables must be identical
+#   docker compose --profile airflow up -d          Airflow 3 (:18144) runs the daily DAG at 06:00 IST
+# Ports bind to 127.0.0.1 only. Optional AI explainer: see .env.example (AI_PROVIDER=openai + AI_BASE_URL).
+name: pipewright
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp"]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+
+x-ai: &ai
+  AI_PROVIDER: ${AI_PROVIDER:-template}
+  AI_BASE_URL: ${AI_BASE_URL:-}
+  AI_MODEL: ${AI_MODEL:-}
+  AI_API_KEY: ${AI_API_KEY:-}
+  AI_TIMEOUT: ${AI_TIMEOUT:-15}
+
+x-pipeline: &pipeline
+  <<: *hardening
+  profiles: ["pipeline"]
+  depends_on:
+    source: { condition: service_healthy }
+  environment:
+    <<: *ai
+    SOURCE_API_TOKEN: ${SOURCE_API_TOKEN:-bazaarbox-dev-token}
+  extra_hosts: ["host.docker.internal:host-gateway"]
+
+services:
+  source:
+    <<: *hardening
+    build: { context: ., dockerfile: source/Dockerfile, args: { SOURCE_VERSION: "${SOURCE_VERSION:-1.0}" } }
+    image: pipewright-source:local
+    environment:
+      SOURCE_NOW: ${SOURCE_NOW:-}             # empty = final state; "follow" = late updates show up in later windows
+      SOURCE_FAULT_RATE: ${SOURCE_FAULT_RATE:-0}
+      SOURCE_API_TOKEN: ${SOURCE_API_TOKEN:-bazaarbox-dev-token}
+    ports: ["127.0.0.1:${SOURCE_PORT:-18140}:8000"]
+    volumes:
+      - source-data:/srv/source-data          # an empty volume is filled from the image: the file drops are shared
+
+  pipeline-sql:
+    <<: *pipeline
+    build: { context: ., dockerfile: tracks/sql/Dockerfile }
+    image: pipewright-sql:local
+    volumes:
+      - source-data:/source-data:ro
+      - data:/data
+    environment:
+      <<: *ai
+      SOURCE_API_TOKEN: ${SOURCE_API_TOKEN:-bazaarbox-dev-token}
+      PIPEWRIGHT_LAKE_DIR: /data/sql/lake
+      PIPEWRIGHT_WAREHOUSE: /data/sql/warehouse/pipewright.duckdb
+
+  pipeline-pyspark:
+    <<: *pipeline
+    build: { context: ., dockerfile: tracks/pyspark/Dockerfile, args: { DEBIAN_MIRROR: "${DEBIAN_MIRROR:-https://deb.debian.org}" } }
+    image: pipewright-pyspark:local
+    mem_limit: 2g
+    tmpfs: ["/tmp:exec"]                       # Spark's Parquet codec (snappy) loads a native library from /tmp
+    volumes:
+      - source-data:/source-data:ro
+      - data:/data
+    environment:
+      <<: *ai
+      SOURCE_API_TOKEN: ${SOURCE_API_TOKEN:-bazaarbox-dev-token}
+      PIPEWRIGHT_LAKE_DIR: /data/pyspark/lake
+      PIPEWRIGHT_WAREHOUSE: /data/pyspark/warehouse/pipewright.duckdb
+
+  parity:
+    <<: *hardening
+    profiles: ["pipeline"]
+    image: pipewright-sql:local
+    entrypoint: ["python", "/app/scripts/parity.py"]
+    command: ["compare", "/data/sql/warehouse/pipewright.duckdb", "/data/pyspark/warehouse/pipewright.duckdb"]
+    volumes:
+      - data:/data:ro
+
+  dashboard:
+    <<: *hardening
+    build: { context: ., dockerfile: dashboard/Dockerfile }
+    image: pipewright-dashboard:local
+    environment:
+      <<: *ai
+      PIPEWRIGHT_WAREHOUSE: /data/${DASHBOARD_TRACK:-sql}/warehouse/pipewright.duckdb
+    ports: ["127.0.0.1:${DASHBOARD_PORT:-18142}:8501"]
+    volumes:
+      - data:/data:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  fake-llm:                                   # tests only: an OpenAI-compatible stub (scripts/fake_llm.py), no model, no key
+    <<: *hardening
+    profiles: ["ai-test"]
+    image: pipewright-sql:local
+    entrypoint: ["python", "/scripts/fake_llm.py", "--host", "0.0.0.0", "--port", "18146"]
+    command: ["--mode", "${FAKE_LLM_MODE:-good}"]
+    volumes:
+      - ./scripts:/scripts:ro
+
+  postgres:
+    profiles: ["airflow"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD:-airflow-local-only}
+    volumes:
+      - airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      retries: 20
+
+  airflow:
+    profiles: ["airflow"]
+    build: { context: ., dockerfile: orchestration/Dockerfile }
+    image: pipewright-airflow:local
+    mem_limit: 3g
+    depends_on:
+      postgres: { condition: service_healthy }
+      source: { condition: service_healthy }
+    environment:
+      <<: *ai
+      SOURCE_API_TOKEN: ${SOURCE_API_TOKEN:-bazaarbox-dev-token}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD:-airflow-local-only}@postgres:5432/airflow
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Kolkata
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"   # local only: no login (the port binds to 127.0.0.1)
+      AIRFLOW__API__PORT: "8080"
+      PIPEWRIGHT_LAKE_DIR: /data/sql/lake
+      PIPEWRIGHT_WAREHOUSE: /data/sql/warehouse/pipewright.duckdb
+    ports: ["127.0.0.1:${AIRFLOW_PORT:-18144}:8080"]
+    volumes:
+      - source-data:/source-data:ro
+      - data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/v2/monitor/health', timeout=3)"]
+      interval: 10s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  source-data:
+  data:
+  airflow-db:
